@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api import deps
 from app.crud.crud_job import crud_job
 from app.models.job import ExperienceLevel, Job, JobType
-from app.schemas.job import JobCreate, JobResponse, JobUpdate
+from app.schemas.job import JobCreate, JobResponse, JobUpdate, PaginatedJobResponse
 
 router = APIRouter()
 
@@ -122,3 +122,25 @@ def delete_job(
         )
     crud_job.remove(db, id=job_id)
     return {"message": "Job deleted successfully"}
+
+
+@router.get("/", response_model=PaginatedJobResponse)
+def get_jobs(
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(10, ge=1, le=100, description="Page size"),
+    db: Session = Depends(deps.get_db),
+) -> dict:
+    """
+    Get paginated list of jobs.
+    """
+    skip = (page - 1) * size
+    total = crud_job.count(db)
+    jobs = crud_job.get_multi(db, skip=skip, limit=size)
+    
+    return {
+        "items": jobs,
+        "total": total,
+        "page": page,
+        "size": size,
+        "pages": (total + size - 1) // size
+    }

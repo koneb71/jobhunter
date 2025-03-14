@@ -11,6 +11,8 @@ from app.api.v1.endpoints import (
     search,
     users,
     verification,
+    skills,
+    benefits,
 )
 
 api_router = APIRouter()
@@ -32,3 +34,5 @@ api_router.include_router(
     verification.router, prefix="/verification", tags=["Verification"]
 )
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+api_router.include_router(skills.router, prefix="/skills", tags=["Skills"])
+api_router.include_router(benefits.router, prefix="/benefits", tags=["Benefits"])

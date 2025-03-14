@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -59,7 +59,12 @@ class Job(JobBase):
 
 
 class JobResponse(Job):
-    pass
+    id: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class JobSearchParams(BaseModel):
@@ -74,3 +79,14 @@ class JobSearchParams(BaseModel):
     company_id: Optional[str] = None
     skip: int = 0
     limit: int = 10
+
+
+class PaginatedJobResponse(BaseModel):
+    items: List[JobResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+    class Config:
+        from_attributes = True

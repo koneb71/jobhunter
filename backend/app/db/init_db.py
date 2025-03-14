@@ -6,6 +6,10 @@ from app.core.password import get_password_hash
 from app.db.base_class import Base
 from app.db.session import engine
 from app.models import Job, JobApplication, Profile, User, UserType
+from app import crud, schemas
+from app.core.config import settings
+from app.db import base  # noqa: F401
+from app.db.init_data import init_db as init_seed_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,6 +19,9 @@ def init_db(db: Session) -> None:
     # Create tables
     Base.metadata.create_all(bind=engine)
     logger.info("Created database tables")
+    
+    init_seed_data(db)
+
 
     # Check if we already have users
     user = db.query(User).first()
@@ -24,14 +31,14 @@ def init_db(db: Session) -> None:
 
     users_data = [
         {
-            "email": "admin@example.com",
+            "email": "admin1@example.com",
             "full_name": "John Doe",
             "password": "admin123",
             "user_type": UserType.ADMIN,
             "is_superuser": True,
         },
         {
-            "email": "employer@example.com",
+            "email": "employer1@example.com",
             "full_name": "Jane Smith",
             "password": "employer123",
             "user_type": UserType.EMPLOYER,
@@ -50,7 +57,7 @@ def init_db(db: Session) -> None:
 
     db.commit()
     logger.info("Database initialized")
-
+    
 
 if __name__ == "__main__":
     from app.db.session import SessionLocal

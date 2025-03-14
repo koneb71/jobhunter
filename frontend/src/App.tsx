@@ -152,7 +152,7 @@ function App() {
                 <MainLayout>
                   <Routes>
                     <Route path="dashboard" element={<EmployerDashboard />} />
-                    <Route path="jobs/new" element={<PostJob />} />
+                    <Route path="post-job" element={<PostJob />} />
                   </Routes>
                 </MainLayout>
               </EmployerRoute>

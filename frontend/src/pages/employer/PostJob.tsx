@@ -2,33 +2,23 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { motion } from 'framer-motion';
-import { Briefcase, MapPin, DollarSign, Clock, Building2, FileText } from 'lucide-react';
+import { Briefcase, MapPin, DollarSign, Building2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fetchWithAuth } from '@/utils/api';
+import { Checkbox } from '@/components/ui/checkbox';
+import { TagInput } from '@/components/ui/tag-input';
+import { useJobs, CreateJobData } from '@/hooks/useJobs';
+import { useSkills } from '@/hooks/useSkills';
+import { useBenefits } from '@/hooks/useBenefits';
+import { useAuthStore } from '@/stores/authStore';
+import { AutocompleteTags } from '@/components/ui/autocomplete-tags';
 
-interface JobFormData {
-  title: string;
-  company: string;
-  location: string;
-  type: string;
-  salary_min: string;
-  salary_max: string;
-  description: string;
-  requirements: string;
-  responsibilities: string;
-  benefits: string;
-  experience_level: string;
-  education_level: string;
-  skills: string[];
-}
-
-const jobTypes = [
-  { value: 'full-time', label: 'Full Time' },
-  { value: 'part-time', label: 'Part Time' },
+const employmentTypes = [
+  { value: 'full_time', label: 'Full Time' },
+  { value: 'part_time', label: 'Part Time' },
   { value: 'contract', label: 'Contract' },
   { value: 'internship', label: 'Internship' },
   { value: 'temporary', label: 'Temporary' },
@@ -39,34 +29,46 @@ const experienceLevels = [
   { value: 'mid', label: 'Mid Level' },
   { value: 'senior', label: 'Senior Level' },
   { value: 'lead', label: 'Lead' },
-  { value: 'manager', label: 'Manager' },
+  { value: 'executive', label: 'Executive' },
 ];
 
-const educationLevels = [
-  { value: 'high-school', label: 'High School' },
-  { value: 'associate', label: 'Associate Degree' },
-  { value: 'bachelor', label: 'Bachelor Degree' },
-  { value: 'master', label: 'Master Degree' },
-  { value: 'phd', label: 'PhD' },
+const departments = [
+  { value: 'engineering', label: 'Engineering' },
+  { value: 'design', label: 'Design' },
+  { value: 'product', label: 'Product' },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'sales', label: 'Sales' },
+  { value: 'customer_support', label: 'Customer Support' },
+  { value: 'hr', label: 'Human Resources' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'operations', label: 'Operations' },
+  { value: 'other', label: 'Other' },
 ];
 
 export const PostJob: React.FC = () => {
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState<JobFormData>({
+  const { createJob, isCreatingJob } = useJobs();
+  const { skills, isLoading: isLoadingSkills, getOrCreateSkill } = useSkills();
+  const { benefits, isLoading: isLoadingBenefits, getOrCreateBenefit } = useBenefits();
+  const { user } = useAuthStore();
+
+  const [formData, setFormData] = useState<CreateJobData>({
     title: '',
-    company: '',
-    location: '',
-    type: '',
-    salary_min: '',
-    salary_max: '',
     description: '',
-    requirements: '',
-    responsibilities: '',
-    benefits: '',
+    company_id: user?.id || '',
+    location: '',
+    salary_range: '',
+    employment_type: '',
     experience_level: '',
-    education_level: '',
-    skills: [],
+    skills_required: [],
+    benefits: [],
+    is_remote: false,
+    is_featured: false,
+    status: 'draft',
+    department: '',
+    remote_work: false,
+    visa_sponsorship: false,
+    relocation_assistance: false,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -84,32 +86,75 @@ export const PostJob: React.FC = () => {
     }));
   };
 
-  const handleSkillsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const skills = e.target.value.split(',').map(skill => skill.trim());
+  const handleCheckboxChange = (name: string, checked: boolean) => {
     setFormData(prev => ({
       ...prev,
-      skills
+      [name]: checked
     }));
+  };
+
+  const handleSkillsChange = async (skillNames: string[]) => {
+    try {
+      const skillObjects = await Promise.all(
+        skillNames.map(name => getOrCreateSkill(name))
+      );
+      
+      setFormData(prev => ({
+        ...prev,
+        skills_required: skillObjects.map(skill => skill.id)
+      }));
+    } catch (error) {
+      console.error('Error updating skills:', error);
+      toast.error('Failed to update skills');
+    }
+  };
+
+  const handleBenefitsChange = async (benefitNames: string[]) => {
+    try {
+      const benefitObjects = await Promise.all(
+        benefitNames.map(name => getOrCreateBenefit(name))
+      );
+      
+      setFormData(prev => ({
+        ...prev,
+        benefits: benefitObjects.map(benefit => benefit.id)
+      }));
+    } catch (error) {
+      console.error('Error updating benefits:', error);
+      toast.error('Failed to update benefits');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
 
     try {
-      await fetchWithAuth('/employer/jobs', {
-        method: 'POST',
-        body: JSON.stringify(formData),
-      });
+      if (!user?.id) {
+        toast.error('Company ID is required');
+        return;
+      }
+
+      await createJob(formData);
       toast.success('Job posted successfully!');
       navigate('/employer/dashboard');
     } catch (error) {
-      toast.error('Failed to post job. Please try again.');
       console.error('Error posting job:', error);
-    } finally {
-      setIsLoading(false);
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to post job. Please try again.');
+      }
     }
   };
+
+  // Get the names of selected skills and benefits for display
+  const selectedSkillNames = skills
+    .filter(skill => formData.skills_required.includes(skill.id))
+    .map(skill => skill.name);
+
+  const selectedBenefitNames = benefits
+    .filter(benefit => formData.benefits.includes(benefit.id))
+    .map(benefit => benefit.name);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -145,15 +190,22 @@ export const PostJob: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="company">Company Name</Label>
-              <Input
-                id="company"
-                name="company"
-                value={formData.company}
-                onChange={handleChange}
-                required
-                placeholder="e.g., Tech Corp"
-              />
+              <Label htmlFor="department">Department</Label>
+              <Select
+                value={formData.department}
+                onValueChange={(value) => handleSelectChange('department', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.value} value={dept.value}>
+                      {dept.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -173,16 +225,16 @@ export const PostJob: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="type">Job Type</Label>
+              <Label htmlFor="employment_type">Employment Type</Label>
               <Select
-                value={formData.type}
-                onValueChange={(value) => handleSelectChange('type', value)}
+                value={formData.employment_type}
+                onValueChange={(value) => handleSelectChange('employment_type', value)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select job type" />
+                  <SelectValue placeholder="Select employment type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {jobTypes.map((type) => (
+                  {employmentTypes.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       {type.label}
                     </SelectItem>
@@ -192,35 +244,17 @@ export const PostJob: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="salary_min">Minimum Salary</Label>
+              <Label htmlFor="salary_range">Salary Range</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  id="salary_min"
-                  name="salary_min"
-                  type="number"
-                  value={formData.salary_min}
+                  id="salary_range"
+                  name="salary_range"
+                  value={formData.salary_range}
                   onChange={handleChange}
                   required
                   className="pl-10"
-                  placeholder="e.g., 50000"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="salary_max">Maximum Salary</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  id="salary_max"
-                  name="salary_max"
-                  type="number"
-                  value={formData.salary_max}
-                  onChange={handleChange}
-                  required
-                  className="pl-10"
-                  placeholder="e.g., 100000"
+                  placeholder="e.g., $50,000 - $100,000"
                 />
               </div>
             </div>
@@ -236,25 +270,6 @@ export const PostJob: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {experienceLevels.map((level) => (
-                    <SelectItem key={level.value} value={level.value}>
-                      {level.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="education_level">Education Level</Label>
-              <Select
-                value={formData.education_level}
-                onValueChange={(value) => handleSelectChange('education_level', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select education level" />
-                </SelectTrigger>
-                <SelectContent>
-                  {educationLevels.map((level) => (
                     <SelectItem key={level.value} value={level.value}>
                       {level.label}
                     </SelectItem>
@@ -278,54 +293,94 @@ export const PostJob: React.FC = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="requirements">Requirements</Label>
-            <Textarea
-              id="requirements"
-              name="requirements"
-              value={formData.requirements}
-              onChange={handleChange}
-              required
-              className="min-h-[150px]"
-              placeholder="List the required qualifications and skills..."
+            <Label htmlFor="skills_required">Required Skills</Label>
+            <AutocompleteTags
+              value={selectedSkillNames}
+              onChange={handleSkillsChange}
+              suggestions={skills.map(skill => ({
+                id: skill.id,
+                name: skill.name,
+                category: skill.category
+              }))}
+              placeholder="Type a skill and press Enter..."
+              className="min-h-[42px]"
+              isLoading={isLoadingSkills}
+              maxLength={100}
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="responsibilities">Responsibilities</Label>
-            <Textarea
-              id="responsibilities"
-              name="responsibilities"
-              value={formData.responsibilities}
-              onChange={handleChange}
-              required
-              className="min-h-[150px]"
-              placeholder="Detail the day-to-day responsibilities..."
-            />
+            <p className="text-sm text-gray-500">
+              {isLoadingSkills 
+                ? 'Loading skills...' 
+                : 'Type to search or add new skills. Press Enter to add.'}
+            </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="benefits">Benefits</Label>
-            <Textarea
-              id="benefits"
-              name="benefits"
-              value={formData.benefits}
-              onChange={handleChange}
-              required
-              className="min-h-[150px]"
-              placeholder="List the benefits and perks..."
+            <AutocompleteTags
+              value={selectedBenefitNames}
+              onChange={handleBenefitsChange}
+              suggestions={benefits.map(benefit => ({
+                id: benefit.id,
+                name: benefit.name,
+                category: benefit.category
+              }))}
+              placeholder="Type a benefit and press Enter..."
+              className="min-h-[42px]"
+              isLoading={isLoadingBenefits}
+              maxLength={100}
             />
+            <p className="text-sm text-gray-500">
+              {isLoadingBenefits 
+                ? 'Loading benefits...' 
+                : 'Type to search or add new benefits. Press Enter to add.'}
+            </p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="skills">Required Skills (comma-separated)</Label>
-            <Input
-              id="skills"
-              name="skills"
-              value={formData.skills.join(', ')}
-              onChange={handleSkillsChange}
-              required
-              placeholder="e.g., JavaScript, React, Node.js"
-            />
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_remote"
+                checked={formData.is_remote}
+                onCheckedChange={(checked) => handleCheckboxChange('is_remote', checked as boolean)}
+              />
+              <Label htmlFor="is_remote">Remote Job</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="remote_work"
+                checked={formData.remote_work}
+                onCheckedChange={(checked) => handleCheckboxChange('remote_work', checked as boolean)}
+              />
+              <Label htmlFor="remote_work">Remote Work Available</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="visa_sponsorship"
+                checked={formData.visa_sponsorship}
+                onCheckedChange={(checked) => handleCheckboxChange('visa_sponsorship', checked as boolean)}
+              />
+              <Label htmlFor="visa_sponsorship">Visa Sponsorship Available</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="relocation_assistance"
+                checked={formData.relocation_assistance}
+                onCheckedChange={(checked) => handleCheckboxChange('relocation_assistance', checked as boolean)}
+              />
+              <Label htmlFor="relocation_assistance">Relocation Assistance Available</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_featured"
+                checked={formData.is_featured}
+                onCheckedChange={(checked) => handleCheckboxChange('is_featured', checked as boolean)}
+              />
+              <Label htmlFor="is_featured">Feature this Job Posting</Label>
+            </div>
           </div>
 
           <div className="flex justify-end space-x-4">
@@ -336,12 +391,16 @@ export const PostJob: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? 'Posting...' : 'Post Job'}
+            <Button
+              type="submit"
+              disabled={isCreatingJob}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isCreatingJob ? 'Posting...' : 'Post Job'}
             </Button>
           </div>
         </form>
       </motion.div>
     </div>
   );
-}; 
+};

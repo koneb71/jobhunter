@@ -20,6 +20,8 @@ from .verification import (
     VerificationRequestResponse,
     VerificationRequestUpdate,
 )
+from .skill import Skill, SkillCreate, SkillUpdate, SkillInDB
+from .benefit import Benefit, BenefitCreate, BenefitUpdate, BenefitInDB
 
 __all__ = [
     "JobApplicationCreate",
@@ -48,4 +50,12 @@ __all__ = [
     "TokenPayload",
     "SearchParams",
     "SearchResponse",
+    "Skill",
+    "SkillCreate",
+    "SkillUpdate",
+    "SkillInDB",
+    "Benefit",
+    "BenefitCreate",
+    "BenefitUpdate",
+    "BenefitInDB",
 ]
