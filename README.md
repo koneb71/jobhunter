@@ -143,7 +143,12 @@ cp .env.example .env
 alembic upgrade head
 ```
 
-5. Run development server:
+5. Create a super user:
+```bash
+python create_admin.py --email admin@example.com --password <password> --first-name Admin --last-name User
+```
+
+6. Run development server:
 ```bash
 uvicorn app.main:app --reload
 ```

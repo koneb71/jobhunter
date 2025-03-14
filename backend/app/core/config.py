@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # Database Configuration
     POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER", "localhost")
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
-    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "postgres")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "")
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "jobhunter")
     POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
     
