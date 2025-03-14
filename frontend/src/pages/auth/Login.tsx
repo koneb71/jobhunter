@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { useAuthStore } from '@/stores/authStore'
+import { useAuthStore } from '@/stores/auth'
 import { toast } from 'react-hot-toast'
+import { API_ENDPOINTS } from '@/config/api'
+import type { LoginResponse, LoginError } from '@/types/auth'
 
 const Login = () => {
   const navigate = useNavigate()
@@ -40,11 +42,53 @@ const Login = () => {
 
     try {
       setIsLoading(true)
-      const userType = await login(formData.email, formData.password, formData.remember)
+      console.log('Sending login request with:', {
+        email: formData.email,
+        password: formData.password,
+      })
+
+      const response = await fetch(API_ENDPOINTS.auth.login, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      })
+
+      const data = await response.json() as LoginResponse | LoginError
+      console.log('Response data:', data)
+
+      if (!response.ok) {
+        console.error('Login error response:', data)
+        if ('detail' in data && data.detail) {
+          toast.error(data.detail)
+        } else if ('message' in data && data.message) {
+          toast.error(data.message)
+        } else if ('errors' in data && data.errors) {
+          const firstError = Object.values(data.errors)[0]
+          const errorMessage = firstError && firstError[0] || 'Validation error'
+          toast.error(errorMessage)
+        } else {
+          toast.error('Login failed. Please check your credentials.')
+        }
+        return
+      }
+
+      // Type guard to ensure we have a LoginResponse
+      if (!('user' in data) || !('access_token' in data)) {
+        toast.error('Invalid response from server')
+        return
+      }
+
+      console.log('Login response:', data)
+      login(data.user, data.access_token)
       toast.success('Login successful!')
       
-      // Redirect based on user type
-      switch (userType) {
+      switch (data.user.user_type) {
         case 'admin':
           navigate('/admin/dashboard')
           break
@@ -58,7 +102,8 @@ const Login = () => {
           navigate('/dashboard')
       }
     } catch (error) {
-      toast.error('Invalid email or password')
+      console.error('Login error:', error)
+      toast.error('An error occurred during login. Please try again.')
     } finally {
       setIsLoading(false)
     }

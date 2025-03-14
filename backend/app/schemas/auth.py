@@ -6,10 +6,22 @@ from app.schemas.base import TimestampSchema
 from app.schemas.user import UserResponse
 
 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: EmailStr
+    display_name: str
+    user_type: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
-    user: Optional[UserResponse] = None
+    user: UserResponse
 
 
 class TokenPayload(BaseModel):
@@ -20,7 +32,7 @@ class UserBase(BaseModel):
     email: Optional[EmailStr] = None
     is_active: Optional[bool] = True
     is_superuser: bool = False
-    full_name: Optional[str] = None
+    display_name: Optional[str] = None
 
 
 class UserCreate(UserBase):

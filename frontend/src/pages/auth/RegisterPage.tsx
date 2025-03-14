@@ -5,11 +5,10 @@ import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'react-hot-toast';
 
-export const RegisterPage = () => {
+const RegisterPage = () => {
   const navigate = useNavigate();
   const { register } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);

@@ -1,4 +1,3 @@
-import { AdminLayout } from '@/layouts/AdminLayout';
 import {
   UserGroupIcon,
   BriefcaseIcon,

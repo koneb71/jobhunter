@@ -1,4 +1,4 @@
-import { API_URL } from '@/config'
+import { API_ENDPOINTS } from '@/config/api'
 import { useAuthStore } from '@/stores/authStore'
 
 export async function fetchWithAuth(url: string, options: RequestInit = {}) {
@@ -10,7 +10,7 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
     ...options.headers,
   }
 
-  const response = await fetch(`${API_URL}${url}`, {
+  const response = await fetch(`${API_ENDPOINTS.base}${url}`, {
     ...options,
     headers,
   })

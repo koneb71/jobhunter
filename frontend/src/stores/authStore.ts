@@ -83,8 +83,6 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const data = await response.json()
-          console.log('Login response:', data) // Debug log
-
           const user = data.user
           set({
             token: data.access_token,
@@ -98,6 +96,7 @@ export const useAuthStore = create<AuthState>()(
           if (user.is_superuser && user.user_type === 'admin') {
             return 'admin'
           }
+
           return user.user_type
         } catch (error) {
           set({ error: error instanceof Error ? error.message : 'Login failed' })

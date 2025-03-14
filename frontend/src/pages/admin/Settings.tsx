@@ -1,4 +1,3 @@
-import { AdminLayout } from '@/layouts/AdminLayout';
 import { useState } from 'react';
 
 interface SettingsForm {

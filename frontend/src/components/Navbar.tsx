@@ -1,257 +1,246 @@
-import { Fragment } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { Disclosure, Menu, Transition } from '@headlessui/react'
-import { Bars3Icon, XMarkIcon, UserCircleIcon, HomeIcon, ShieldCheckIcon } from '@heroicons/react/24/outline'
-import { useAuthStore } from '../stores/authStore'
+import React, { useState, useEffect } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { useAuthStore } from "@/stores/auth"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Menu, User, LogOut, Briefcase, Building2 } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
-const navigation = [
-  { name: 'Home', href: '/', current: true },
-  { name: 'Jobs', href: '/jobs', current: false },
-  { name: 'Companies', href: '/companies', current: false },
-]
+const Navbar = () => {
+  const navigate = useNavigate()
+  const { user, logout, isLoading, initialize } = useAuthStore()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+  useEffect(() => {
+    initialize()
+  }, [initialize])
 
-export default function Navbar() {
-  const { isAuthenticated, user, logout } = useAuthStore()
-  const location = useLocation()
-  const isEmployer = user?.user_type === 'employer'
+  const handleLogout = () => {
+    logout()
+    navigate("/")
+  }
+
+  const getDashboardLink = () => {
+    if (!user) return "/dashboard"
+    
+    console.log('Getting dashboard link for user:', user)
+    console.log('User type:', user.user_type)
+    
+    const link = (() => {
+      switch (user.user_type) {
+        case "admin":
+          return "/admin/dashboard"
+        case "employer":
+          return "/employer/dashboard"
+        case "job_seeker":
+          return "/job-seeker/dashboard"
+        default:
+          console.log('Default case hit for user type:', user.user_type)
+          return "/dashboard"
+      }
+    })()
+    
+    console.log('Generated dashboard link:', link)
+    return link
+  }
+
+  const getInitials = (name: string | undefined) => {
+    if (!name) return "U"
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
 
   return (
-    <Disclosure as="nav" className="bg-white shadow">
-      {({ open }) => (
-        <>
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="flex h-16 justify-between">
-              <div className="flex">
-                <div className="flex flex-shrink-0 items-center">
-                  <Link to="/" className="text-xl font-bold text-blue-600">
-                    JobHunter
-                  </Link>
-                </div>
-                <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                  {navigation.map((item) => (
-                    <Link
-                      key={item.name}
-                      to={item.href}
-                      className={classNames(
-                        location.pathname === item.href
-                          ? 'border-blue-500 text-gray-900'
-                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
-                        'inline-flex items-center border-b-2 px-1 pt-1 text-sm font-medium'
-                      )}
-                    >
-                      {item.name}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-              <div className="hidden sm:ml-6 sm:flex sm:items-center">
-                {isAuthenticated ? (
-                  <>
-                    {isEmployer && location.pathname !== '/dashboard' && (
-                      <Link
-                        to="/dashboard"
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 mr-4"
-                      >
-                        <HomeIcon className="h-4 w-4 mr-2" />
-                        Dashboard
-                      </Link>
-                    )}
-                    <Menu as="div" className="relative ml-3">
-                      <div>
-                        <Menu.Button className="flex rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                          <span className="sr-only">Open user menu</span>
-                          <UserCircleIcon className="h-8 w-8 text-gray-400" />
-                        </Menu.Button>
-                      </div>
-                      <Transition
-                        as={Fragment}
-                        enter="transition ease-out duration-200"
-                        enterFrom="transform opacity-0 scale-95"
-                        enterTo="transform opacity-100 scale-100"
-                        leave="transition ease-in duration-75"
-                        leaveFrom="transform opacity-100 scale-100"
-                        leaveTo="transform opacity-0 scale-95"
-                      >
-                        <Menu.Items className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                          <Menu.Item>
-                            {({ active }) => (
-                              <Link
-                                to="/profile"
-                                className={classNames(
-                                  active ? 'bg-gray-100' : '',
-                                  'block px-4 py-2 text-sm text-gray-700'
-                                )}
-                              >
-                                Your Profile
-                              </Link>
-                            )}
-                          </Menu.Item>
-                          {user?.user_type === 'admin' && (
-                            <Menu.Item>
-                              {({ active }) => (
-                                <Link
-                                  to="/admin"
-                                  className={classNames(
-                                    active ? 'bg-gray-100' : '',
-                                    'block px-4 py-2 text-sm text-gray-700'
-                                  )}
-                                >
-                                  <div className="flex items-center">
-                                    <ShieldCheckIcon className="h-4 w-4 mr-2 text-blue-600" />
-                                    Admin Panel
-                                  </div>
-                                </Link>
-                              )}
-                            </Menu.Item>
-                          )}
-                          <Menu.Item>
-                            {({ active }) => (
-                              <button
-                                onClick={logout}
-                                className={classNames(
-                                  active ? 'bg-gray-100' : '',
-                                  'block w-full px-4 py-2 text-left text-sm text-gray-700'
-                                )}
-                              >
-                                Sign out
-                              </button>
-                            )}
-                          </Menu.Item>
-                        </Menu.Items>
-                      </Transition>
-                    </Menu>
-                  </>
-                ) : (
-                  <div className="space-x-4">
-                    <Link
-                      to="/login"
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 hover:text-blue-700"
-                    >
-                      Sign in
-                    </Link>
-                    <Link
-                      to="/register"
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                    >
-                      Sign up
-                    </Link>
-                  </div>
-                )}
-              </div>
-              <div className="-mr-2 flex items-center sm:hidden">
-                <Disclosure.Button className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500">
-                  <span className="sr-only">Open main menu</span>
-                  {open ? (
-                    <XMarkIcon className="block h-6 w-6" aria-hidden="true" />
-                  ) : (
-                    <Bars3Icon className="block h-6 w-6" aria-hidden="true" />
-                  )}
-                </Disclosure.Button>
-              </div>
+    <nav className="bg-white shadow-sm">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex">
+            <div className="flex-shrink-0 flex items-center">
+              <Link to="/" className="text-2xl font-bold text-blue-600">
+                JobHunter
+              </Link>
+            </div>
+            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+              <Link
+                to="/"
+                className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+              >
+                Home
+              </Link>
+              <Link
+                to="/jobs"
+                className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+              >
+                Jobs
+              </Link>
+              <Link
+                to="/companies"
+                className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+              >
+                Companies
+              </Link>
             </div>
           </div>
-
-          <Disclosure.Panel className="sm:hidden">
-            <div className="space-y-1 pb-3 pt-2">
-              {navigation.map((item) => (
-                <Disclosure.Button
-                  key={item.name}
-                  as={Link}
-                  to={item.href}
-                  className={classNames(
-                    location.pathname === item.href
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-transparent text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800',
-                    'block border-l-4 py-2 pl-3 pr-4 text-base font-medium'
+          <div className="sm:ml-6 sm:flex sm:items-center">
+            {isLoading ? (
+              <div className="h-8 w-8 animate-pulse bg-gray-200 rounded-full" />
+            ) : user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full p-0">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="bg-blue-100 text-blue-600">
+                        {getInitials(user.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 bg-white" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        Hi, {user.name || 'there'} 👋
+                      </p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {user.email}
+                      </p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        Type: {user.user_type}
+                      </p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        Dashboard: {getDashboardLink()}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => {
+                    console.log('Navigating to:', getDashboardLink())
+                    navigate(getDashboardLink())
+                  }}>
+                    <Briefcase className="mr-2 h-4 w-4" />
+                    <span>Dashboard</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/profile")}>
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </DropdownMenuItem>
+                  {user.user_type === "employer" && (
+                    <DropdownMenuItem onClick={() => navigate("/employer/company")}>
+                      <Building2 className="mr-2 h-4 w-4" />
+                      <span>Company Profile</span>
+                    </DropdownMenuItem>
                   )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="flex space-x-4">
+                <Button variant="outline" onClick={() => navigate("/login")}>
+                  Sign in
+                </Button>
+                <Button onClick={() => navigate("/register")}>Sign up</Button>
+              </div>
+            )}
+          </div>
+          <div className="-mr-2 flex items-center sm:hidden">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              <Menu className="h-6 w-6" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile menu */}
+      {isMenuOpen && (
+        <div className="sm:hidden">
+          <div className="pt-2 pb-3 space-y-1">
+            <Link
+              to="/"
+              className="block pl-3 pr-4 py-2 border-l-4 text-base font-medium border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
+            >
+              Home
+            </Link>
+            <Link
+              to="/jobs"
+              className="block pl-3 pr-4 py-2 border-l-4 text-base font-medium border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
+            >
+              Jobs
+            </Link>
+            <Link
+              to="/companies"
+              className="block pl-3 pr-4 py-2 border-l-4 text-base font-medium border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
+            >
+              Companies
+            </Link>
+            {user ? (
+              <>
+                <Link
+                  to={getDashboardLink()}
+                  className="block pl-3 pr-4 py-2 border-l-4 text-base font-medium border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
                 >
-                  {item.name}
-                </Disclosure.Button>
-              ))}
-            </div>
-            <div className="border-t border-gray-200 pb-3 pt-4">
-              {isAuthenticated ? (
-                <>
-                  <div className="flex items-center px-4">
-                    <div className="flex-shrink-0">
-                      <UserCircleIcon className="h-8 w-8 text-gray-400" />
-                    </div>
-                    <div className="ml-3">
-                      <div className="text-base font-medium text-gray-800">
-                        {user?.display_name || user?.email}
-                      </div>
-                      <div className="text-sm font-medium text-gray-500">
-                        {user?.email}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-3 space-y-1">
-                    {isEmployer && location.pathname !== '/dashboard' && (
-                      <Disclosure.Button
-                        as={Link}
-                        to="/dashboard"
-                        className="block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                      >
-                        <div className="flex items-center">
-                          <HomeIcon className="h-5 w-5 mr-2" />
-                          Dashboard
-                        </div>
-                      </Disclosure.Button>
-                    )}
-                    <Disclosure.Button
-                      as={Link}
-                      to="/profile"
-                      className="block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                    >
-                      Your Profile
-                    </Disclosure.Button>
-                    {user?.user_type === 'admin' && (
-                      <Disclosure.Button
-                        as={Link}
-                        to="/admin"
-                        className="block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                      >
-                        <div className="flex items-center">
-                          <ShieldCheckIcon className="h-4 w-4 mr-2 text-blue-600" />
-                          Admin Panel
-                        </div>
-                      </Disclosure.Button>
-                    )}
-                    <Disclosure.Button
-                      as="button"
-                      onClick={logout}
-                      className="block w-full px-4 py-2 text-left text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                    >
-                      Sign out
-                    </Disclosure.Button>
-                  </div>
-                </>
-              ) : (
-                <div className="mt-3 space-y-1">
-                  <Disclosure.Button
-                    as={Link}
-                    to="/login"
-                    className="block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                  Dashboard
+                </Link>
+                <Link
+                  to="/profile"
+                  className="block pl-3 pr-4 py-2 border-l-4 text-base font-medium border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
+                >
+                  Profile
+                </Link>
+                {user.user_type === "employer" && (
+                  <Link
+                    to="/employer/company"
+                    className="block pl-3 pr-4 py-2 border-l-4 text-base font-medium border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
                   >
-                    Sign in
-                  </Disclosure.Button>
-                  <Disclosure.Button
-                    as={Link}
-                    to="/register"
-                    className="block px-4 py-2 text-base font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                  >
-                    Sign up
-                  </Disclosure.Button>
-                </div>
-              )}
-            </div>
-          </Disclosure.Panel>
-        </>
+                    Company Profile
+                  </Link>
+                )}
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left pl-3 pr-4 py-2 border-l-4 text-base font-medium border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
+                >
+                  Log out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="block pl-3 pr-4 py-2 border-l-4 text-base font-medium border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/register"
+                  className="block pl-3 pr-4 py-2 border-l-4 text-base font-medium border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700"
+                >
+                  Sign up
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
       )}
-    </Disclosure>
+    </nav>
   )
-} 
+}
+
+export default Navbar 

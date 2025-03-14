@@ -9,7 +9,7 @@ from app.api import deps
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.crud import crud_user
-from app.schemas.auth import Token
+from app.schemas.auth import Token, LoginRequest
 from app.schemas.user import UserCreate
 
 router = APIRouter()
@@ -37,13 +37,15 @@ async def register(*, db: Session = Depends(deps.get_db), user_in: UserCreate) -
 
 @router.post("/login", response_model=Token)
 async def login(
-    db: Session = Depends(deps.get_db), form_data: OAuth2PasswordRequestForm = Depends()
+    *,
+    db: Session = Depends(deps.get_db),
+    login_data: LoginRequest,
 ) -> Any:
     """
-    OAuth2 compatible token login, get an access token for future requests.
+    Login endpoint to get an access token for future requests.
     """
     user = crud_user.authenticate(
-        db, email=form_data.username, password=form_data.password
+        db, email=login_data.email, password=login_data.password
     )
     if not user:
         raise HTTPException(
@@ -59,7 +61,16 @@ async def login(
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(user.id, expires_delta=access_token_expires)
 
-    return {"access_token": access_token, "token_type": "bearer", "user": user}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "display_name": user.display_name,
+            "user_type": user.user_type,
+        }
+    }
 
 
 @router.post("/refresh-token", response_model=Token)
