@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime, timedelta
-from supabase import Client
+from sqlalchemy.orm import Session
+from sqlalchemy import func, desc, and_, or_
 import aiofiles
 import os
 from fastapi import UploadFile
@@ -17,6 +18,7 @@ from app.schemas.verification import (
 )
 from app.schemas.profile import ProfileVerification, ProfileVerificationStatus
 from app.models.user import User
+from app.models.verification_request import VerificationRequest as VerificationRequestModel
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -39,7 +41,7 @@ class CompressionResult:
 class VerificationService:
     @staticmethod
     async def create_verification_request(
-        db: Client,
+        db: Session,
         user: User,
         request: VerificationRequestCreate
     ) -> VerificationRequestResponse:
@@ -48,77 +50,90 @@ class VerificationService:
             "user_id": user.id,
             "verification_type": request.verification_type,
             "status": VerificationRequestStatus.PENDING,
-            "submitted_at": datetime.utcnow().isoformat(),
+            "submitted_at": datetime.utcnow(),
             "evidence": request.evidence,
             "notes": request.notes
         }
         
-        response = await db.table("verification_requests").insert(verification_data).execute()
-        return VerificationRequestResponse(**response.data[0])
+        db_obj = VerificationRequestModel(**verification_data)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return VerificationRequestResponse.from_orm(db_obj)
 
     @staticmethod
     async def get_verification_request(
-        db: Client,
+        db: Session,
         request_id: str
     ) -> Optional[VerificationRequestResponse]:
         """Get a verification request by ID."""
-        response = await db.table("verification_requests").select("*").eq("id", request_id).execute()
-        if not response.data:
+        db_obj = db.query(VerificationRequestModel).filter(VerificationRequestModel.id == request_id).first()
+        if not db_obj:
             return None
-        return VerificationRequestResponse(**response.data[0])
+        return VerificationRequestResponse.from_orm(db_obj)
 
     @staticmethod
     async def get_user_verification_requests(
-        db: Client,
+        db: Session,
         user_id: str,
         status: Optional[VerificationRequestStatus] = None
     ) -> List[VerificationRequestResponse]:
         """Get all verification requests for a user."""
-        query = db.table("verification_requests").select("*").eq("user_id", user_id)
+        query = db.query(VerificationRequestModel).filter(VerificationRequestModel.user_id == user_id)
         if status:
-            query = query.eq("status", status)
+            query = query.filter(VerificationRequestModel.status == status)
         
-        response = await query.execute()
-        return [VerificationRequestResponse(**item) for item in response.data]
+        db_objs = query.all()
+        return [VerificationRequestResponse.from_orm(obj) for obj in db_objs]
 
     @staticmethod
     async def update_verification_request(
-        db: Client,
+        db: Session,
         request_id: str,
         update: VerificationRequestUpdate,
         reviewer_id: str
     ) -> Optional[VerificationRequestResponse]:
         """Update a verification request."""
+        db_obj = db.query(VerificationRequestModel).filter(VerificationRequestModel.id == request_id).first()
+        if not db_obj:
+            return None
+
         update_data = update.model_dump(exclude_unset=True)
-        update_data["reviewed_at"] = datetime.utcnow().isoformat()
+        update_data["reviewed_at"] = datetime.utcnow()
         update_data["reviewed_by"] = reviewer_id
 
-        response = await db.table("verification_requests").update(update_data).eq("id", request_id).execute()
-        if not response.data:
-            return None
+        for key, value in update_data.items():
+            setattr(db_obj, key, value)
+        
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
         
         # Update user's profile verification status if request is approved/rejected
         if update.status in [VerificationRequestStatus.APPROVED, VerificationRequestStatus.REJECTED]:
             await VerificationService._update_profile_verification(
                 db,
-                response.data[0]["user_id"],
-                response.data[0]["verification_type"],
+                db_obj.user_id,
+                db_obj.verification_type,
                 update.status
             )
         
-        return VerificationRequestResponse(**response.data[0])
+        return VerificationRequestResponse.from_orm(db_obj)
 
     @staticmethod
     async def _update_profile_verification(
-        db: Client,
+        db: Session,
         user_id: str,
         verification_type: VerificationType,
         status: VerificationRequestStatus
     ) -> None:
         """Update user's profile verification status."""
         # Get current verification status
-        response = await db.table("users").select("profile_verification").eq("id", user_id).execute()
-        current_verification = response.data[0].get("profile_verification", {})
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return
+        
+        current_verification = user.profile_verification or {}
         
         # Update verified fields based on verification type
         verified_fields = current_verification.get("verified_fields", [])
@@ -140,66 +155,91 @@ class VerificationService:
         new_verification = {
             "status": ProfileVerificationStatus.VERIFIED if len(verified_fields) > 0 else ProfileVerificationStatus.UNVERIFIED,
             "verified_fields": list(set(verified_fields)),
-            "verification_date": datetime.utcnow().isoformat(),
+            "verification_date": datetime.utcnow(),
             "verified_by": "system"
         }
         
-        await db.table("users").update({"profile_verification": new_verification}).eq("id", user_id).execute()
+        user.profile_verification = new_verification
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
     @staticmethod
-    async def get_verification_stats(db: Client) -> VerificationStats:
+    async def get_verification_stats(db: Session) -> VerificationStats:
         """Get verification statistics."""
-        response = await db.table("verification_requests").select("*").execute()
-        requests = response.data
-        
         stats = VerificationStats()
-        stats.total_requests = len(requests)
+        
+        # Get total requests
+        stats.total_requests = db.query(VerificationRequestModel).count()
         
         # Count requests by status
-        for request in requests:
-            status = request["status"]
+        status_counts = (
+            db.query(
+                VerificationRequestModel.status,
+                func.count(VerificationRequestModel.id)
+            )
+            .group_by(VerificationRequestModel.status)
+            .all()
+        )
+        
+        for status, count in status_counts:
             if status == VerificationRequestStatus.PENDING:
-                stats.pending_requests += 1
+                stats.pending_requests = count
             elif status == VerificationRequestStatus.IN_REVIEW:
-                stats.in_review_requests += 1
+                stats.in_review_requests = count
             elif status == VerificationRequestStatus.APPROVED:
-                stats.approved_requests += 1
+                stats.approved_requests = count
             elif status == VerificationRequestStatus.REJECTED:
-                stats.rejected_requests += 1
-            
-            # Count requests by type
-            verification_type = request["verification_type"]
-            stats.requests_by_type[verification_type] = stats.requests_by_type.get(verification_type, 0) + 1
+                stats.rejected_requests = count
+        
+        # Count requests by type
+        type_counts = (
+            db.query(
+                VerificationRequestModel.verification_type,
+                func.count(VerificationRequestModel.id)
+            )
+            .group_by(VerificationRequestModel.verification_type)
+            .all()
+        )
+        
+        for verification_type, count in type_counts:
+            stats.requests_by_type[verification_type] = count
         
         # Calculate average review time
-        reviewed_requests = [r for r in requests if r.get("reviewed_at") and r.get("submitted_at")]
-        if reviewed_requests:
-            total_time = sum(
-                (datetime.fromisoformat(r["reviewed_at"]) - datetime.fromisoformat(r["submitted_at"])).total_seconds()
-                for r in reviewed_requests
+        reviewed_requests = (
+            db.query(
+                func.avg(
+                    func.extract('epoch', VerificationRequestModel.reviewed_at - VerificationRequestModel.submitted_at)
+                )
             )
-            stats.average_review_time = total_time / len(reviewed_requests)
+            .filter(VerificationRequestModel.reviewed_at.isnot(None))
+            .scalar()
+        )
+        
+        if reviewed_requests:
+            stats.average_review_time = float(reviewed_requests)
         
         # Get recent activity
-        recent_requests = sorted(
-            requests,
-            key=lambda x: x.get("reviewed_at", x.get("submitted_at", "")),
-            reverse=True
-        )[:10]
+        recent_requests = (
+            db.query(VerificationRequestModel)
+            .order_by(desc(func.coalesce(VerificationRequestModel.reviewed_at, VerificationRequestModel.submitted_at)))
+            .limit(10)
+            .all()
+        )
         
         stats.recent_activity = [
             {
-                "request_id": r["id"],
-                "user_id": r["user_id"],
-                "type": r["verification_type"],
-                "status": r["status"],
-                "timestamp": r.get("reviewed_at", r.get("submitted_at")),
-                "reviewer": r.get("reviewed_by")
+                "request_id": r.id,
+                "user_id": r.user_id,
+                "type": r.verification_type,
+                "status": r.status,
+                "timestamp": r.reviewed_at or r.submitted_at,
+                "reviewer": r.reviewed_by
             }
             for r in recent_requests
         ]
         
-        return stats 
+        return stats
 
     @staticmethod
     async def validate_document(
@@ -301,7 +341,7 @@ class VerificationService:
 
     @staticmethod
     async def batch_upload_documents(
-        db: Client,
+        db: Session,
         files: List[UploadFile],
         document_type: str,
         user_id: str,
@@ -377,7 +417,8 @@ class VerificationService:
                 )
                 
                 # Save document record to database
-                await db.table("verification_documents").insert(document.model_dump()).execute()
+                await db.add(document)
+                await db.commit()
                 
                 result.documents.append(document.model_dump())
                 result.success_count += 1
@@ -477,19 +518,22 @@ class VerificationService:
         )
 
     @staticmethod
-    async def get_dashboard_data(db: Client) -> VerificationDashboard:
+    async def get_dashboard_data(db: Session) -> VerificationDashboard:
         """Get data for the verification dashboard."""
         # Get basic stats
         stats = await VerificationService.get_verification_stats(db)
         
         # Get pending requests
-        pending_response = await db.table("verification_requests").select("*").eq("status", VerificationRequestStatus.PENDING).execute()
-        pending_requests = [VerificationRequestResponse(**item) for item in pending_response.data]
+        pending_response = db.query(VerificationRequestModel).filter(VerificationRequestModel.status == VerificationRequestStatus.PENDING).all()
+        pending_requests = [VerificationRequestResponse.from_orm(obj) for obj in pending_response]
         
         # Get verification types data
-        types_response = await db.table("verification_requests").select("verification_type, status").execute()
+        types_response = db.query(
+            VerificationRequestModel.verification_type,
+            VerificationRequestModel.status
+        ).group_by(VerificationRequestModel.verification_type, VerificationRequestModel.status).all()
         verification_types = {}
-        for request in types_response.data:
+        for request in types_response:
             v_type = request["verification_type"]
             if v_type not in verification_types:
                 verification_types[v_type] = {
@@ -498,13 +542,12 @@ class VerificationService:
                     "rejected": 0,
                     "pending": 0
                 }
-            verification_types[v_type]["total"] += 1
             verification_types[v_type][request["status"]] += 1
         
         # Get top reviewers
-        reviewers_response = await db.table("verification_requests").select("reviewed_by").not_.is_("reviewed_by", "null").execute()
+        reviewers_response = db.query(VerificationRequestModel.reviewed_by).filter(VerificationRequestModel.reviewed_by != None).group_by(VerificationRequestModel.reviewed_by).all()
         reviewer_counts = {}
-        for request in reviewers_response.data:
+        for request in reviewers_response:
             reviewer = request["reviewed_by"]
             reviewer_counts[reviewer] = reviewer_counts.get(reviewer, 0) + 1
         
@@ -519,10 +562,13 @@ class VerificationService:
         rejection_rate = (stats.rejected_requests / total_requests * 100) if total_requests > 0 else 0
         
         # Get monthly trends
-        monthly_response = await db.table("verification_requests").select("submitted_at, status").execute()
+        monthly_response = db.query(
+            func.date_trunc('month', VerificationRequestModel.submitted_at),
+            VerificationRequestModel.status
+        ).group_by(func.date_trunc('month', VerificationRequestModel.submitted_at), VerificationRequestModel.status).all()
         monthly_trends = {}
-        for request in monthly_response.data:
-            date = datetime.fromisoformat(request["submitted_at"]).strftime("%Y-%m")
+        for request in monthly_response:
+            date = request[0].strftime("%Y-%m")
             if date not in monthly_trends:
                 monthly_trends[date] = {
                     "total": 0,
@@ -530,8 +576,7 @@ class VerificationService:
                     "rejected": 0,
                     "pending": 0
                 }
-            monthly_trends[date]["total"] += 1
-            monthly_trends[date][request["status"]] += 1
+            monthly_trends[date][request[1]] += 1
         
         return VerificationDashboard(
             stats=stats,
@@ -546,18 +591,19 @@ class VerificationService:
         ) 
 
     @staticmethod
-    async def get_daily_verification_trends(db: Client) -> List[Dict[str, Any]]:
+    async def get_daily_verification_trends(db: Session) -> List[Dict[str, Any]]:
         """Get daily verification trends for the last 30 days."""
         thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
         
-        response = await db.table("verification_requests").select(
-            "submitted_at", "status"
-        ).gte("submitted_at", thirty_days_ago).execute()
+        response = db.query(
+            func.date_trunc('day', VerificationRequestModel.submitted_at),
+            VerificationRequestModel.status
+        ).filter(VerificationRequestModel.submitted_at >= thirty_days_ago).group_by(func.date_trunc('day', VerificationRequestModel.submitted_at), VerificationRequestModel.status).all()
         
         # Group by date and status
         trends = {}
-        for request in response.data:
-            date = datetime.fromisoformat(request["submitted_at"]).strftime("%Y-%m-%d")
+        for request in response:
+            date = request[0].strftime("%Y-%m-%d")
             if date not in trends:
                 trends[date] = {
                     "date": date,
@@ -567,76 +613,69 @@ class VerificationService:
                     "pending": 0
                 }
             trends[date]["total"] += 1
-            trends[date][request["status"]] += 1
+            trends[date][request[1]] += 1
         
         return list(trends.values())
 
     @staticmethod
-    async def get_weekly_verification_trends(db: Client) -> List[Dict[str, Any]]:
+    async def get_weekly_verification_trends(db: Session) -> List[Dict[str, Any]]:
         """Get weekly verification trends for the last 12 weeks."""
         twelve_weeks_ago = (datetime.utcnow() - timedelta(weeks=12)).isoformat()
         
-        response = await db.table("verification_requests").select(
-            "submitted_at", "status"
-        ).gte("submitted_at", twelve_weeks_ago).execute()
+        response = db.query(
+            func.date_trunc('week', VerificationRequestModel.submitted_at),
+            VerificationRequestModel.status
+        ).filter(VerificationRequestModel.submitted_at >= twelve_weeks_ago).group_by(func.date_trunc('week', VerificationRequestModel.submitted_at), VerificationRequestModel.status).all()
         
         # Group by week and status
         trends = {}
-        for request in response.data:
-            date = datetime.fromisoformat(request["submitted_at"])
-            week = date.strftime("%Y-W%W")
-            if week not in trends:
-                trends[week] = {
-                    "week": week,
+        for request in response:
+            date = request[0].strftime("%Y-W%W")
+            if date not in trends:
+                trends[date] = {
+                    "week": date,
                     "total": 0,
                     "approved": 0,
                     "rejected": 0,
                     "pending": 0
                 }
-            trends[week]["total"] += 1
-            trends[week][request["status"]] += 1
+            trends[date]["total"] += 1
+            trends[date][request[1]] += 1
         
         return list(trends.values())
 
     @staticmethod
-    async def get_document_type_statistics(db: Client) -> Dict[str, Any]:
+    async def get_document_type_statistics(db: Session) -> Dict[str, Any]:
         """Get statistics about document types."""
-        response = await db.table("verification_documents").select(
-            "document_type", "file_size"
-        ).execute()
+        response = db.query(
+            VerificationRequestModel.verification_type,
+            func.count(VerificationRequestModel.id),
+            func.sum(VerificationRequestModel.file_size)
+        ).group_by(VerificationRequestModel.verification_type).all()
         
         stats = {
             "by_type": {},
-            "total_documents": len(response.data),
-            "total_size": sum(doc["file_size"] for doc in response.data)
+            "total_documents": len(response),
+            "total_size": sum(doc[2] for doc in response)
         }
         
-        for doc in response.data:
-            doc_type = doc["document_type"]
+        for doc in response:
+            doc_type = doc[0]
             if doc_type not in stats["by_type"]:
                 stats["by_type"][doc_type] = {
-                    "count": 0,
-                    "total_size": 0,
-                    "average_size": 0
+                    "count": doc[1],
+                    "total_size": doc[2],
+                    "average_size": doc[2] / doc[1] if doc[1] > 0 else 0
                 }
-            stats["by_type"][doc_type]["count"] += 1
-            stats["by_type"][doc_type]["total_size"] += doc["file_size"]
-        
-        # Calculate averages
-        for doc_type in stats["by_type"]:
-            count = stats["by_type"][doc_type]["count"]
-            stats["by_type"][doc_type]["average_size"] = (
-                stats["by_type"][doc_type]["total_size"] / count
-            )
         
         return stats
 
     @staticmethod
-    async def get_document_size_statistics(db: Client) -> Dict[str, Any]:
+    async def get_document_size_statistics(db: Session) -> Dict[str, Any]:
         """Get statistics about document sizes."""
-        response = await db.table("verification_documents").select("file_size").execute()
+        response = db.query(VerificationRequestModel.file_size).all()
         
-        sizes = [doc["file_size"] for doc in response.data]
+        sizes = [doc[0] for doc in response]
         return {
             "total_documents": len(sizes),
             "total_size": sum(sizes),
@@ -652,20 +691,21 @@ class VerificationService:
         }
 
     @staticmethod
-    async def get_document_validation_success_rate(db: Client) -> Dict[str, Any]:
+    async def get_document_validation_success_rate(db: Session) -> Dict[str, Any]:
         """Get document validation success rate statistics."""
-        response = await db.table("verification_documents").select(
-            "document_type", "validation_status"
-        ).execute()
+        response = db.query(
+            VerificationRequestModel.verification_type,
+            VerificationRequestModel.validation_status
+        ).group_by(VerificationRequestModel.verification_type, VerificationRequestModel.validation_status).all()
         
         stats = {
-            "total_documents": len(response.data),
+            "total_documents": len(response),
             "success_rate": 0,
             "by_type": {}
         }
         
-        for doc in response.data:
-            doc_type = doc["document_type"]
+        for doc in response:
+            doc_type = doc[0]
             if doc_type not in stats["by_type"]:
                 stats["by_type"][doc_type] = {
                     "total": 0,
@@ -675,7 +715,7 @@ class VerificationService:
                 }
             
             stats["by_type"][doc_type]["total"] += 1
-            if doc.get("validation_status") == "valid":
+            if doc[1] == "valid":
                 stats["by_type"][doc_type]["valid"] += 1
             else:
                 stats["by_type"][doc_type]["invalid"] += 1
@@ -693,44 +733,44 @@ class VerificationService:
         return stats
 
     @staticmethod
-    async def get_reviewer_activity(db: Client) -> List[Dict[str, Any]]:
+    async def get_reviewer_activity(db: Session) -> List[Dict[str, Any]]:
         """Get reviewer activity statistics."""
-        response = await db.table("verification_requests").select(
-            "reviewed_by", "submitted_at", "reviewed_at", "status"
-        ).not_.is_("reviewed_by", "null").execute()
+        response = db.query(
+            VerificationRequestModel.reviewed_by,
+            func.count(VerificationRequestModel.id),
+            func.avg(func.extract('epoch', VerificationRequestModel.reviewed_at - VerificationRequestModel.submitted_at))
+        ).filter(VerificationRequestModel.reviewed_by != None).group_by(VerificationRequestModel.reviewed_by).all()
         
         # Group by reviewer
         activity = {}
-        for request in response.data:
-            reviewer = request["reviewed_by"]
+        for request in response:
+            reviewer = request[0]
             if reviewer not in activity:
                 activity[reviewer] = {
                     "reviewer": reviewer,
-                    "total_reviews": 0,
+                    "total_reviews": request[1],
                     "approved": 0,
                     "rejected": 0,
                     "average_response_time": 0,
                     "last_review": None
                 }
             
-            activity[reviewer]["total_reviews"] += 1
-            activity[reviewer][request["status"]] += 1
+            activity[reviewer]["approved"] += 1
+            activity[reviewer]["rejected"] += 1
             
             # Calculate response time
-            submitted = datetime.fromisoformat(request["submitted_at"])
-            reviewed = datetime.fromisoformat(request["reviewed_at"])
-            response_time = (reviewed - submitted).total_seconds()
+            response_time = float(request[2])
             
             # Update last review
-            if not activity[reviewer]["last_review"] or reviewed > datetime.fromisoformat(activity[reviewer]["last_review"]):
-                activity[reviewer]["last_review"] = request["reviewed_at"]
+            if not activity[reviewer]["last_review"] or response_time > float(activity[reviewer]["last_review"]):
+                activity[reviewer]["last_review"] = response_time
         
         # Calculate averages
         for reviewer in activity:
             total_time = sum(
-                (datetime.fromisoformat(r["reviewed_at"]) - datetime.fromisoformat(r["submitted_at"])).total_seconds()
-                for r in response.data
-                if r["reviewed_by"] == reviewer
+                float(r[2])
+                for r in response
+                if r[0] == reviewer
             )
             activity[reviewer]["average_response_time"] = (
                 total_time / activity[reviewer]["total_reviews"]
@@ -739,32 +779,27 @@ class VerificationService:
         return list(activity.values())
 
     @staticmethod
-    async def get_average_verification_time(db: Client) -> float:
+    async def get_average_verification_time(db: Session) -> float:
         """Get average verification time in seconds."""
-        response = await db.table("verification_requests").select(
-            "submitted_at", "reviewed_at"
-        ).not_.is_("reviewed_at", "null").execute()
+        response = db.query(
+            func.avg(func.extract('epoch', VerificationRequestModel.reviewed_at - VerificationRequestModel.submitted_at))
+        ).filter(VerificationRequestModel.reviewed_at.isnot(None)).scalar()
         
-        if not response.data:
+        if not response:
             return 0
         
-        total_time = sum(
-            (datetime.fromisoformat(r["reviewed_at"]) - datetime.fromisoformat(r["submitted_at"])).total_seconds()
-            for r in response.data
-        )
-        
-        return total_time / len(response.data)
+        return float(response)
 
     @staticmethod
-    async def get_verification_success_rate(db: Client) -> float:
+    async def get_verification_success_rate(db: Session) -> float:
         """Get verification success rate."""
-        response = await db.table("verification_requests").select("status").execute()
+        response = db.query(VerificationRequestModel.status).filter(VerificationRequestModel.status == VerificationRequestStatus.APPROVED).count()
+        total_requests = db.query(VerificationRequestModel).count()
         
-        if not response.data:
+        if not total_requests:
             return 0
         
-        approved = sum(1 for r in response.data if r["status"] == VerificationRequestStatus.APPROVED)
-        return (approved / len(response.data)) * 100 
+        return (response / total_requests) * 100
 
     @staticmethod
     def compress_image(
@@ -822,4 +857,28 @@ class VerificationService:
                 success=False,
                 error=str(e)
             )
-            return None, result 
+            return None, result
+
+    @staticmethod
+    def _get_verified_fields(user: User) -> List[str]:
+        """Get list of verified fields for a user."""
+        verified_fields = []
+        
+        # Basic profile verification
+        if user.email_verified:
+            verified_fields.append("email")
+        if user.phone_verified:
+            verified_fields.append("phone")
+        if user.full_name:
+            verified_fields.append("full_name")
+        
+        # Add other verified fields
+        if user.profile:
+            if user.profile.education_verified:
+                verified_fields.append("education")
+            if user.profile.employment_verified:
+                verified_fields.append("employment")
+            if user.profile.skills_verified:
+                verified_fields.append("skills")
+        
+        return verified_fields 

@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from supabase import Client
+from sqlalchemy.orm import Session
 from fastapi import UploadFile
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
@@ -12,7 +12,7 @@ import shutil
 class UserService:
     @staticmethod
     async def update_profile_picture(
-        db: Client,
+        db: Session,
         user_id: str,
         file: UploadFile
     ) -> Optional[Dict[str, Any]]:
@@ -69,7 +69,7 @@ class UserService:
             update_data = {
                 "profile_picture": profile_url,
                 "profile_picture_thumb": thumbnail_url,
-                "profile_picture_updated_at": datetime.utcnow().isoformat(),
+                "profile_picture_updated_at": datetime.utcnow(),
                 "profile_picture_metadata": {
                     "original_size": compression_result["original_size"],
                     "compressed_size": compression_result["compressed_size"],
@@ -82,7 +82,19 @@ class UserService:
                 }
             }
             
-            response = await db.table("users").update(update_data).eq("id", user_id).execute()
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return {
+                    "success": False,
+                    "error": "User not found"
+                }
+            
+            for key, value in update_data.items():
+                setattr(user, key, value)
+            
+            db.add(user)
+            db.commit()
+            db.refresh(user)
             
             return {
                 "success": True,
@@ -106,17 +118,17 @@ class UserService:
 
     @staticmethod
     async def delete_profile_picture(
-        db: Client,
+        db: Session,
         user_id: str
     ) -> bool:
         """Delete user's profile picture and thumbnail."""
         try:
             # Get user's profile picture metadata
-            response = await db.table("users").select("profile_picture_metadata").eq("id", user_id).execute()
-            if not response.data or not response.data[0].get("profile_picture_metadata"):
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user or not user.profile_picture_metadata:
                 return False
             
-            metadata = response.data[0]["profile_picture_metadata"]
+            metadata = user.profile_picture_metadata
             
             # Delete files
             for file_path in [metadata.get("local_path"), metadata.get("local_thumb_path")]:
@@ -124,11 +136,13 @@ class UserService:
                     os.remove(file_path)
             
             # Update user record
-            await db.table("users").update({
-                "profile_picture": None,
-                "profile_picture_thumb": None,
-                "profile_picture_metadata": None
-            }).eq("id", user_id).execute()
+            user.profile_picture = None
+            user.profile_picture_thumb = None
+            user.profile_picture_metadata = None
+            
+            db.add(user)
+            db.commit()
+            db.refresh(user)
             
             return True
             

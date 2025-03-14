@@ -1,9 +1,9 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from supabase import Client
+from sqlalchemy.orm import Session
 
 from app.core.deps import get_db
-from app.core.security import get_current_active_user
+from app.api.deps import get_current_active_user
 from app.crud import crud_notification
 from app.models.user import User
 from app.schemas.notification import (
@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.get("/my-notifications", response_model=List[NotificationResponse])
 def get_my_notifications(
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -27,7 +27,7 @@ def get_my_notifications(
 
 @router.get("/unread", response_model=List[NotificationResponse])
 def get_unread_notifications(
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -40,7 +40,7 @@ def get_unread_notifications(
 @router.get("/type/{notification_type}", response_model=List[NotificationResponse])
 def get_notifications_by_type(
     notification_type: NotificationType,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -55,7 +55,7 @@ def get_notifications_by_type(
 @router.get("/{notification_id}", response_model=NotificationResponse)
 def get_notification(
     notification_id: str,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
@@ -77,7 +77,7 @@ def get_notification(
 @router.post("/", response_model=NotificationResponse)
 def create_notification(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     notification_in: NotificationCreate,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -94,7 +94,7 @@ def create_notification(
 @router.put("/{notification_id}", response_model=NotificationResponse)
 def update_notification(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     notification_id: str,
     notification_in: NotificationUpdate,
     current_user: User = Depends(get_current_active_user),
@@ -118,7 +118,7 @@ def update_notification(
 @router.post("/{notification_id}/read", response_model=NotificationResponse)
 def mark_notification_as_read(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     notification_id: str,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -147,7 +147,7 @@ def mark_notification_as_read(
 @router.post("/read-all", response_model=List[NotificationResponse])
 def mark_all_notifications_as_read(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """

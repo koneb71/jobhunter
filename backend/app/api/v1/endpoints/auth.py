@@ -2,39 +2,52 @@ from datetime import timedelta
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from supabase import Client
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_db
-from app.core.security import get_current_active_user, create_access_token
-from app.schemas.auth import Token, UserCreate, UserResponse
+from app.core.security import create_access_token
+from app.schemas.user import UserCreate
+from app.schemas.auth import Token
 from app.crud import crud_user
-from app.models.user import User
+from app.api import deps
 
 router = APIRouter()
 
-@router.post("/register", response_model=UserResponse)
-def register(
+@router.post("/register", response_model=Token)
+async def register(
     *,
-    db: Client = Depends(get_db),
-    user_in: UserCreate,
+    db: Session = Depends(deps.get_db),
+    user_in: UserCreate
 ) -> Any:
     """
     Register new user.
     """
-    user = crud_user.get_by_email(db, email=user_in.email)
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="The user with this email already exists in the system.",
+    try:
+        user = crud_user.create(db, obj_in=user_in)
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            user.id, expires_delta=access_token_expires
         )
-    
-    user = crud_user.create(db, obj_in=user_in)
-    return user
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": user
+        }
+    except ValueError as e:
+        if "Email already registered" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This email is already registered. Please use a different email or try logging in."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 @router.post("/login", response_model=Token)
-def login(
-    db: Client = Depends(get_db),
+async def login(
+    db: Session = Depends(deps.get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     """
@@ -62,11 +75,12 @@ def login(
     return {
         "access_token": access_token,
         "token_type": "bearer",
+        "user": user
     }
 
 @router.post("/refresh-token", response_model=Token)
-def refresh_token(
-    current_user: User = Depends(get_current_active_user),
+async def refresh_token(
+    current_user = Depends(deps.get_current_user),
 ) -> Any:
     """
     Refresh access token.
@@ -79,4 +93,5 @@ def refresh_token(
     return {
         "access_token": access_token,
         "token_type": "bearer",
+        "user": current_user
     } 

@@ -1,13 +1,14 @@
 from typing import Any, List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query
-from supabase import Client
+from sqlalchemy.orm import Session
+from sqlalchemy import func, desc, and_, or_
 
 from app.core.deps import get_db
-from app.core.security import get_current_active_user
+from app.api.deps import get_current_active_user
 from app.crud import crud_user
 from app.models.user import User
 from app.schemas.user import (
-    UserCreate, UserUpdate, User as UserSchema,
+    UserCreate, UserUpdate, UserResponse,
     UserRole, AvailabilityStatus, EmploymentType,
     WorkSchedule, EmploymentPreferences, CompanySize,
     BenefitType
@@ -22,7 +23,7 @@ from app.services.search import SearchService
 
 router = APIRouter()
 
-@router.get("/me", response_model=UserSchema)
+@router.get("/me", response_model=UserResponse)
 def read_user_me(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -31,9 +32,9 @@ def read_user_me(
     """
     return current_user
 
-@router.get("/", response_model=List[UserSchema])
+@router.get("/", response_model=List[UserResponse])
 def read_users(
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -48,10 +49,10 @@ def read_users(
         )
     return crud_user.get_multi(db, skip=skip, limit=limit)
 
-@router.get("/role/{role}", response_model=List[UserSchema])
+@router.get("/role/{role}", response_model=List[UserResponse])
 def read_users_by_role(
     role: UserRole,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -66,10 +67,10 @@ def read_users_by_role(
         )
     return crud_user.get_by_role(db, role=role, skip=skip, limit=limit)
 
-@router.get("/skills", response_model=List[UserSchema])
+@router.get("/skills", response_model=List[UserResponse])
 def read_users_by_skills(
     skills: List[str] = Query(...),
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -79,10 +80,10 @@ def read_users_by_skills(
     """
     return crud_user.get_by_skills(db, skills=skills, skip=skip, limit=limit)
 
-@router.get("/availability/{status}", response_model=List[UserSchema])
+@router.get("/availability/{status}", response_model=List[UserResponse])
 def read_users_by_availability(
     status: AvailabilityStatus,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -92,10 +93,10 @@ def read_users_by_availability(
     """
     return crud_user.get_by_availability(db, status=status, skip=skip, limit=limit)
 
-@router.get("/{user_id}", response_model=UserSchema)
+@router.get("/{user_id}", response_model=UserResponse)
 def read_user_by_id(
     user_id: str,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
@@ -114,10 +115,10 @@ def read_user_by_id(
         )
     return user
 
-@router.post("/", response_model=UserSchema)
+@router.post("/", response_model=UserResponse)
 def create_user(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     user_in: UserCreate,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -137,10 +138,10 @@ def create_user(
         )
     return crud_user.create(db, obj_in=user_in)
 
-@router.put("/me", response_model=UserSchema)
+@router.put("/me", response_model=UserResponse)
 def update_user_me(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     user_in: UserUpdate,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -149,10 +150,10 @@ def update_user_me(
     """
     return crud_user.update(db, db_obj=current_user, obj_in=user_in)
 
-@router.put("/{user_id}", response_model=UserSchema)
+@router.put("/{user_id}", response_model=UserResponse)
 def update_user(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     user_id: str,
     user_in: UserUpdate,
     current_user: User = Depends(get_current_active_user),
@@ -160,110 +161,104 @@ def update_user(
     """
     Update a user.
     """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403,
-            detail="Not enough permissions",
-        )
     user = crud_user.get(db, id=user_id)
     if not user:
         raise HTTPException(
             status_code=404,
             detail="User not found",
+        )
+    if not current_user.is_superuser and user.id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not enough permissions",
         )
     return crud_user.update(db, db_obj=user, obj_in=user_in)
 
 @router.delete("/{user_id}")
 def delete_user(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     user_id: str,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
     Delete a user.
     """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=403,
-            detail="Not enough permissions",
-        )
     user = crud_user.get(db, id=user_id)
     if not user:
         raise HTTPException(
             status_code=404,
             detail="User not found",
         )
-    return crud_user.remove(db, id=user_id)
+    if not current_user.is_superuser and user.id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not enough permissions",
+        )
+    crud_user.remove(db, id=user_id)
+    return {"status": "success"}
 
 @router.get("/employment-types", response_model=List[str])
 def get_employment_types() -> Any:
     """
-    Get all available employment types.
+    Get list of employment types.
     """
     return [e.value for e in EmploymentType]
 
 @router.get("/work-schedules", response_model=List[str])
 def get_work_schedules() -> Any:
     """
-    Get all available work schedules.
+    Get list of work schedules.
     """
-    return [w.value for w in WorkSchedule]
+    return [s.value for s in WorkSchedule]
 
-@router.get("/preferred-employment", response_model=List[UserSchema])
+@router.get("/preferred-employment", response_model=List[UserResponse])
 def get_users_by_employment_preference(
     employment_type: EmploymentType,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
     """
-    Get users who prefer a specific employment type.
+    Get users by employment preference.
     """
-    response = (
-        db.table("users")
-        .select("*")
-        .contains("employment_preferences->preferred_employment_types", [employment_type])
-        .order("created_at", desc=True)
-        .range(skip, skip + limit - 1)
-        .execute()
+    return crud_user.get_by_employment_preference(
+        db,
+        employment_type=employment_type,
+        skip=skip,
+        limit=limit
     )
-    return [User(**item) for item in response.data]
 
-@router.get("/preferred-schedule", response_model=List[UserSchema])
+@router.get("/preferred-schedule", response_model=List[UserResponse])
 def get_users_by_work_schedule(
     work_schedule: WorkSchedule,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
     """
-    Get users who prefer a specific work schedule.
+    Get users by work schedule preference.
     """
-    response = (
-        db.table("users")
-        .select("*")
-        .contains("employment_preferences->preferred_work_schedule", [work_schedule])
-        .order("created_at", desc=True)
-        .range(skip, skip + limit - 1)
-        .execute()
+    return crud_user.get_by_work_schedule(
+        db,
+        work_schedule=work_schedule,
+        skip=skip,
+        limit=limit
     )
-    return [User(**item) for item in response.data]
 
-@router.put("/me/employment-preferences", response_model=UserSchema)
+@router.put("/me/employment-preferences", response_model=UserResponse)
 def update_employment_preferences(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     preferences: EmploymentPreferences,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
-    Update user's employment preferences.
+    Update current user's employment preferences.
     """
-    update_data = {"employment_preferences": preferences.model_dump()}
-    return crud_user.update(db, db_obj=current_user, obj_in=update_data)
+    return crud_user.update_employment_preferences(db, user=current_user, preferences=preferences)
 
 @router.get("/me/employment-preferences", response_model=EmploymentPreferences)
 def get_employment_preferences(
@@ -274,7 +269,7 @@ def get_employment_preferences(
     """
     return current_user.employment_preferences
 
-@router.get("/search/employment", response_model=List[UserSchema])
+@router.get("/search/employment", response_model=List[UserResponse])
 def search_users_by_employment_criteria(
     employment_type: Optional[EmploymentType] = None,
     work_schedule: Optional[WorkSchedule] = None,
@@ -285,7 +280,7 @@ def search_users_by_employment_criteria(
     remote_percentage: Optional[int] = Query(None, ge=0, le=100),
     benefits: Optional[List[BenefitType]] = None,
     location: Optional[str] = None,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -293,44 +288,27 @@ def search_users_by_employment_criteria(
     """
     Search users by employment criteria.
     """
-    query = db.table("users").select("*")
-    
-    if employment_type:
-        query = query.contains("employment_preferences->preferred_employment_types", [employment_type])
-    
-    if work_schedule:
-        query = query.contains("employment_preferences->preferred_work_schedule", [work_schedule])
-    
-    if company_size:
-        query = query.contains("employment_preferences->preferred_company_size", [company_size])
-    
-    if min_salary is not None:
-        query = query.gte("employment_preferences->preferred_salary_range->min", min_salary)
-    
-    if max_salary is not None:
-        query = query.lte("employment_preferences->preferred_salary_range->max", max_salary)
-    
-    if currency:
-        query = query.eq("employment_preferences->preferred_currency", currency)
-    
-    if remote_percentage is not None:
-        query = query.eq("employment_preferences->preferred_remote_percentage", remote_percentage)
-    
-    if benefits:
-        query = query.contains("employment_preferences->preferred_benefits", benefits)
-    
-    if location:
-        query = query.ilike("location", f"%{location}%")
-    
-    response = query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
-    return [User(**item) for item in response.data]
+    return crud_user.search_by_employment_criteria(
+        db,
+        employment_type=employment_type,
+        work_schedule=work_schedule,
+        company_size=company_size,
+        min_salary=min_salary,
+        max_salary=max_salary,
+        currency=currency,
+        remote_percentage=remote_percentage,
+        benefits=benefits,
+        location=location,
+        skip=skip,
+        limit=limit
+    )
 
-@router.get("/search/salary-range", response_model=List[UserSchema])
+@router.get("/search/salary-range", response_model=List[UserResponse])
 def search_users_by_salary_range(
     min_salary: float,
     max_salary: float,
     currency: str = Query(..., pattern="^[A-Z]{3}$"),
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -338,152 +316,175 @@ def search_users_by_salary_range(
     """
     Search users by salary range.
     """
-    response = (
-        db.table("users")
-        .select("*")
-        .gte("employment_preferences->preferred_salary_range->min", min_salary)
-        .lte("employment_preferences->preferred_salary_range->max", max_salary)
-        .eq("employment_preferences->preferred_currency", currency)
-        .order("created_at", desc=True)
-        .range(skip, skip + limit - 1)
-        .execute()
+    return crud_user.search_by_salary_range(
+        db,
+        min_salary=min_salary,
+        max_salary=max_salary,
+        currency=currency,
+        skip=skip,
+        limit=limit
     )
-    return [User(**item) for item in response.data]
 
-@router.get("/search/benefits", response_model=List[UserSchema])
+@router.get("/search/benefits", response_model=List[UserResponse])
 def search_users_by_benefits(
     benefits: List[BenefitType],
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
     """
-    Search users by preferred benefits.
+    Search users by benefits preferences.
     """
-    response = (
-        db.table("users")
-        .select("*")
-        .contains("employment_preferences->preferred_benefits", benefits)
-        .order("created_at", desc=True)
-        .range(skip, skip + limit - 1)
-        .execute()
+    return crud_user.search_by_benefits(
+        db,
+        benefits=benefits,
+        skip=skip,
+        limit=limit
     )
-    return [User(**item) for item in response.data]
 
-@router.get("/search/location", response_model=List[UserSchema])
+@router.get("/search/location", response_model=List[UserResponse])
 def search_users_by_location(
     location: str,
     max_distance: Optional[int] = Query(None, ge=0, le=500),
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
     """
-    Search users by location and optional maximum distance.
+    Search users by location.
     """
-    query = (
-        db.table("users")
-        .select("*")
-        .ilike("location", f"%{location}%")
+    return crud_user.search_by_location(
+        db,
+        location=location,
+        max_distance=max_distance,
+        skip=skip,
+        limit=limit
     )
-    
-    if max_distance is not None:
-        query = query.lte("employment_preferences->preferred_commute_distance", max_distance)
-    
-    response = query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
-    return [User(**item) for item in response.data]
 
-@router.get("/search/work-environment", response_model=List[UserSchema])
+@router.get("/search/work-environment", response_model=List[UserResponse])
 def search_users_by_work_environment(
     environment: str,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
     """
-    Search users by preferred work environment.
+    Search users by work environment preferences.
     """
-    response = (
-        db.table("users")
-        .select("*")
-        .contains("employment_preferences->preferred_work_environment", [environment])
-        .order("created_at", desc=True)
-        .range(skip, skip + limit - 1)
-        .execute()
+    return crud_user.search_by_work_environment(
+        db,
+        environment=environment,
+        skip=skip,
+        limit=limit
     )
-    return [User(**item) for item in response.data]
 
 @router.get("/analytics/employment-preferences", response_model=Dict[str, Any])
 def get_employment_preferences_analytics(
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
-    Get analytics about employment preferences.
+    Get analytics about users' employment preferences.
     """
     if not current_user.is_superuser:
         raise HTTPException(
             status_code=403,
             detail="Not enough permissions",
         )
+
+    total_users = db.query(func.count(User.id)).scalar()
     
-    # Get all users
-    response = db.table("users").select("employment_preferences").execute()
-    users = response.data
+    # Employment type distribution
+    employment_type_dist = (
+        db.query(
+            User.employment_preferences["employment_type"].label("type"),
+            func.count(User.id).label("count")
+        )
+        .group_by("type")
+        .all()
+    )
+
+    # Work schedule distribution
+    work_schedule_dist = (
+        db.query(
+            User.employment_preferences["work_schedule"].label("schedule"),
+            func.count(User.id).label("count")
+        )
+        .group_by("schedule")
+        .all()
+    )
+
+    # Salary range distribution
+    salary_ranges = [
+        (0, 50000),
+        (50000, 100000),
+        (100000, 150000),
+        (150000, float('inf'))
+    ]
     
-    # Initialize counters
-    employment_types = {}
-    work_schedules = {}
-    company_sizes = {}
-    benefits = {}
-    remote_percentages = {}
-    salary_ranges = {}
-    
-    # Count preferences
-    for user in users:
-        prefs = user.get("employment_preferences", {})
-        
-        # Employment types
-        for emp_type in prefs.get("preferred_employment_types", []):
-            employment_types[emp_type] = employment_types.get(emp_type, 0) + 1
-        
-        # Work schedules
-        for schedule in prefs.get("preferred_work_schedule", []):
-            work_schedules[schedule] = work_schedules.get(schedule, 0) + 1
-        
-        # Company sizes
-        for size in prefs.get("preferred_company_size", []):
-            company_sizes[size] = company_sizes.get(size, 0) + 1
-        
-        # Benefits
-        for benefit in prefs.get("preferred_benefits", []):
-            benefits[benefit] = benefits.get(benefit, 0) + 1
-        
-        # Remote percentages
-        remote_pct = prefs.get("preferred_remote_percentage")
-        if remote_pct is not None:
-            remote_percentages[remote_pct] = remote_percentages.get(remote_pct, 0) + 1
-        
-        # Salary ranges
-        salary_range = prefs.get("preferred_salary_range")
-        if salary_range:
-            min_salary = salary_range.get("min")
-            max_salary = salary_range.get("max")
-            if min_salary is not None and max_salary is not None:
-                range_key = f"{min_salary}-{max_salary}"
-                salary_ranges[range_key] = salary_ranges.get(range_key, 0) + 1
-    
+    salary_dist = []
+    for min_sal, max_sal in salary_ranges:
+        count = (
+            db.query(func.count(User.id))
+            .filter(
+                User.employment_preferences["min_salary"].astext.cast(float) >= min_sal,
+                or_(
+                    User.employment_preferences["max_salary"].astext.cast(float) <= max_sal,
+                    max_sal == float('inf')
+                )
+            )
+            .scalar()
+        )
+        salary_dist.append({
+            "range": f"${min_sal:,} - {'∞' if max_sal == float('inf') else f'${max_sal:,}'}",
+            "count": count
+        })
+
+    # Remote work preference distribution
+    remote_dist = (
+        db.query(
+            User.employment_preferences["remote_percentage"].label("percentage"),
+            func.count(User.id).label("count")
+        )
+        .group_by("percentage")
+        .all()
+    )
+
+    # Benefits preferences
+    benefits_dist = (
+        db.query(
+            func.jsonb_array_elements_text(User.employment_preferences["benefits"]).label("benefit"),
+            func.count(User.id).label("count")
+        )
+        .group_by("benefit")
+        .all()
+    )
+
     return {
-        "employment_types": employment_types,
-        "work_schedules": work_schedules,
-        "company_sizes": company_sizes,
-        "benefits": benefits,
-        "remote_percentages": remote_percentages,
-        "salary_ranges": salary_ranges,
-        "total_users": len(users)
+        "total_users": total_users,
+        "employment_type_distribution": [
+            {"type": type_, "count": count, "percentage": (count/total_users)*100}
+            for type_, count in employment_type_dist
+        ],
+        "work_schedule_distribution": [
+            {"schedule": schedule, "count": count, "percentage": (count/total_users)*100}
+            for schedule, count in work_schedule_dist
+        ],
+        "salary_distribution": [
+            {**range_, "percentage": (range_["count"]/total_users)*100}
+            for range_ in salary_dist
+        ],
+        "remote_work_distribution": [
+            {"percentage": pct, "count": count, "ratio": (count/total_users)*100}
+            for pct, count in remote_dist
+        ],
+        "benefits_preferences": [
+            {"benefit": benefit, "count": count, "percentage": (count/total_users)*100}
+            for benefit, count in benefits_dist
+        ]
     }
 
 @router.get("/me/profile-score", response_model=ProfileScore)
@@ -491,7 +492,7 @@ def get_profile_score(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
-    Get current user's profile completion score and recommendations.
+    Get current user's profile score.
     """
     return ProfileService.calculate_profile_score(current_user)
 
@@ -500,41 +501,40 @@ def get_skill_ratings(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
-    Get current user's skill ratings based on work experience.
+    Get current user's skill ratings.
     """
-    return [
-        ProfileService.calculate_skill_rating(skill, current_user.work_experience)
-        for skill in current_user.skills
-    ]
+    return ProfileService.get_skill_ratings(current_user)
 
 @router.post("/me/skills/{skill}/endorse", response_model=SkillEndorsement)
 def endorse_skill(
     skill: str,
     comment: Optional[str] = None,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     endorser: User = Depends(get_current_active_user),
 ) -> Any:
     """
     Endorse a user's skill.
     """
-    if skill not in current_user.skills:
+    if not current_user.skills or skill not in current_user.skills:
         raise HTTPException(
             status_code=400,
-            detail="Skill not found in user's profile",
+            detail=f"User does not have the skill: {skill}",
         )
     
-    endorsement = ProfileService.create_skill_endorsement(
+    if current_user.id == endorser.id:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot endorse your own skills",
+        )
+    
+    return ProfileService.endorse_skill(
+        db,
+        user=current_user,
+        endorser=endorser,
         skill=skill,
-        endorser_id=endorser.id,
-        endorser_name=f"{endorser.first_name} {endorser.last_name}",
         comment=comment
     )
-    
-    # Update user's skill endorsements in database
-    # Implementation depends on your database structure
-    
-    return endorsement
 
 @router.get("/me/verification", response_model=ProfileVerification)
 def get_profile_verification(
@@ -543,8 +543,7 @@ def get_profile_verification(
     """
     Get current user's profile verification status.
     """
-    # Implementation depends on your database structure
-    return ProfileVerification()
+    return current_user.profile_verification
 
 @router.get("/me/analytics", response_model=ProfileAnalytics)
 def get_profile_analytics(
@@ -553,69 +552,39 @@ def get_profile_analytics(
     """
     Get current user's profile analytics.
     """
-    # Implementation depends on your database structure
-    return ProfileAnalytics()
+    return ProfileService.get_profile_analytics(current_user)
 
 @router.post("/search", response_model=SearchResult)
 def search_users(
     criteria: SearchCriteria,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
-    Advanced search for users with multiple criteria.
+    Search users based on criteria.
     """
-    # Build and execute search query
-    query = SearchService.build_search_query(db, criteria)
-    response = query.range(
-        (criteria.page - 1) * criteria.per_page,
-        criteria.page * criteria.per_page - 1
-    ).execute()
-    
-    # Get total count
-    count_response = db.table("users").select("id", count="exact").execute()
-    total_count = count_response.count
-    
-    # Calculate match scores
-    results = []
-    for user_data in response.data:
-        user = User(**user_data)
-        match_score = SearchService.calculate_match_score(user, criteria)
-        results.append({
-            **user_data,
-            "match_score": match_score
-        })
-    
-    # Sort by match score if no specific sort criteria
-    if not criteria.sort_by:
-        results.sort(key=lambda x: x["match_score"], reverse=True)
-    
-    return SearchResult(
-        total_count=total_count,
-        page=criteria.page,
-        per_page=criteria.per_page,
-        total_pages=(total_count + criteria.per_page - 1) // criteria.per_page,
-        results=results,
-        facets=SearchService.get_search_facets(db)
-    )
+    search_service = SearchService()
+    return search_service.search_users(db, criteria)
 
 @router.get("/search/suggestions", response_model=List[str])
 def get_search_suggestions(
     query: str = Query(..., min_length=2),
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
-    Get search suggestions based on partial query.
+    Get search suggestions based on query.
     """
-    return SearchService.get_search_suggestions(db, query)
+    search_service = SearchService()
+    return search_service.get_user_search_suggestions(db, query)
 
 @router.get("/search/facets", response_model=Dict[str, Any])
 def get_search_facets(
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
-    Get search facets for filtering.
+    Get search facets for user search.
     """
-    return SearchService.get_search_facets(db) 
+    search_service = SearchService()
+    return search_service.get_user_search_facets(db) 

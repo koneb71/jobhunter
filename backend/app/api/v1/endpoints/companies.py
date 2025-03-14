@@ -1,9 +1,9 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from supabase import Client
+from sqlalchemy.orm import Session
 
 from app.core.deps import get_db
-from app.core.security import get_current_active_user
+from app.api.deps import get_current_active_user
 from app.crud import crud_company
 from app.models.user import User
 from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/search", response_model=List[CompanyResponse])
 def search_companies(
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     query: str = "",
     industry: str = "",
     location: str = "",
@@ -34,7 +34,7 @@ def search_companies(
 @router.get("/industry/{industry}", response_model=List[CompanyResponse])
 def get_companies_by_industry(
     industry: str,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
@@ -46,7 +46,7 @@ def get_companies_by_industry(
 @router.get("/location/{location}", response_model=List[CompanyResponse])
 def get_companies_by_location(
     location: str,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
@@ -58,7 +58,7 @@ def get_companies_by_location(
 @router.get("/{company_id}", response_model=CompanyResponse)
 def get_company(
     company_id: str,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> Any:
     """
     Get a specific company by id.
@@ -74,7 +74,7 @@ def get_company(
 @router.post("/", response_model=CompanyResponse)
 def create_company(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     company_in: CompanyCreate,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -91,7 +91,7 @@ def create_company(
 @router.put("/{company_id}", response_model=CompanyResponse)
 def update_company(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     company_id: str,
     company_in: CompanyUpdate,
     current_user: User = Depends(get_current_active_user),
@@ -115,7 +115,7 @@ def update_company(
 @router.delete("/{company_id}")
 def delete_company(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     company_id: str,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:

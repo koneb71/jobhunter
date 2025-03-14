@@ -2,6 +2,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, EmailStr, validator
 from datetime import datetime
 from enum import Enum
+from pydantic import ConfigDict
 
 from app.schemas.base import TimestampSchema
 
@@ -194,69 +195,43 @@ class ProfilePictureMetadata(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
-class UserProfileBase(BaseModel):
+class UserType(str, Enum):
+    JOB_SEEKER = "job_seeker"
+    EMPLOYER = "employer"
+    ADMIN = "admin"
+
+class UserBase(BaseModel):
+    email: EmailStr
     first_name: str
     last_name: str
-    email: EmailStr
-    phone: Optional[str] = None
-    role: UserRole = UserRole.JOBSEEKER
+    display_name: Optional[str] = None
+    user_type: UserType
     is_active: bool = True
     is_superuser: bool = False
-    profile_picture: Optional[str] = None
-    profile_picture_thumb: Optional[str] = None
-    profile_picture_updated_at: Optional[str] = None
-    profile_picture_metadata: Optional[ProfilePictureMetadata] = None
-    tagline: Optional[str] = Field(None, max_length=200)
-    profile_overview: Optional[str] = Field(None, max_length=1000)
-    location: Optional[str] = None
-    availability_status: AvailabilityStatus = AvailabilityStatus.AVAILABLE
-    expected_salary: Optional[float] = None
-    skills: List[str] = Field(default_factory=list)
-    education: List[Education] = Field(default_factory=list)
-    work_experience: List[WorkExperience] = Field(default_factory=list)
-    portfolio: List[Portfolio] = Field(default_factory=list)
-    languages: List[Dict[str, str]] = Field(default_factory=list)  # [{"language": "English", "level": "Native"}]
-    certifications: List[Dict[str, str]] = Field(default_factory=list)  # [{"name": "AWS Certified", "issuer": "Amazon"}]
-    social_links: Dict[str, str] = Field(default_factory=dict)  # {"linkedin": "url", "github": "url"}
-    employment_preferences: EmploymentPreferences = Field(default_factory=EmploymentPreferences)
-    preferences: Dict[str, Any] = Field(default_factory=dict)
 
-class UserCreate(UserProfileBase):
+class UserCreate(UserBase):
     password: str
 
 class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    profile_picture: Optional[str] = None
-    profile_picture_thumb: Optional[str] = None
-    profile_picture_updated_at: Optional[str] = None
-    profile_picture_metadata: Optional[ProfilePictureMetadata] = None
-    tagline: Optional[str] = Field(None, max_length=200)
-    profile_overview: Optional[str] = Field(None, max_length=1000)
-    location: Optional[str] = None
-    availability_status: Optional[AvailabilityStatus] = None
-    expected_salary: Optional[float] = None
-    skills: Optional[List[str]] = None
-    education: Optional[List[Education]] = None
-    work_experience: Optional[List[WorkExperience]] = None
-    portfolio: Optional[List[Portfolio]] = None
-    languages: Optional[List[Dict[str, str]]] = None
-    certifications: Optional[List[Dict[str, str]]] = None
-    social_links: Optional[Dict[str, str]] = None
-    employment_preferences: Optional[EmploymentPreferences] = None
-    preferences: Optional[Dict[str, Any]] = None
+    display_name: Optional[str] = None
     password: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_superuser: Optional[bool] = None
 
-class UserInDBBase(UserProfileBase, TimestampSchema):
+class UserResponse(UserBase):
     id: str
+    created_at: datetime
+    updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
-class User(UserInDBBase):
-    pass
+class UserInDB(UserBase):
+    id: str
+    hashed_password: str
+    created_at: datetime
+    updated_at: datetime
 
-class UserInDB(UserInDBBase):
-    hashed_password: str 
+    model_config = ConfigDict(from_attributes=True) 

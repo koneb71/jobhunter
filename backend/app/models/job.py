@@ -1,33 +1,59 @@
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
+from enum import Enum
+from sqlalchemy import (
+    Boolean, Column, Integer, String, Text, 
+    ForeignKey, DateTime, Enum as SQLAlchemyEnum, Float, JSON
+)
+from sqlalchemy.orm import relationship
+from app.db.base_class import Base
+import uuid
 
-class Job(BaseModel):
-    id: str
-    title: str
-    description: str
-    location: str
-    salary_min: Optional[float] = None
-    salary_max: Optional[float] = None
-    job_type: str
-    experience_level: Optional[str] = None
-    required_skills: List[str] = []
-    preferred_skills: List[str] = []
-    benefits: List[str] = []
-    is_featured: bool = False
-    is_active: bool = True
-    expires_at: Optional[datetime] = None
-    company_id: str
-    department: Optional[str] = None
-    remote_work: bool = False
-    visa_sponsorship: bool = False
-    relocation_assistance: bool = False
-    created_at: datetime
-    updated_at: Optional[datetime] = None
-    created_by: str
-    company_name: Optional[str] = None
-    application_count: int = 0
-    view_count: int = 0
+class JobType(str, Enum):
+    FULL_TIME = "full_time"
+    PART_TIME = "part_time"
+    CONTRACT = "contract"
+    INTERNSHIP = "internship"
+    FREELANCE = "freelance"
 
-    class Config:
-        from_attributes = True 
+class ExperienceLevel(str, Enum):
+    ENTRY = "entry"
+    JUNIOR = "junior"
+    MID = "mid"
+    SENIOR = "senior"
+    LEAD = "lead"
+    EXECUTIVE = "executive"
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    location = Column(String, nullable=False)
+    salary_min = Column(Float)
+    salary_max = Column(Float)
+    job_type = Column(SQLAlchemyEnum(JobType), nullable=False)
+    experience_level = Column(SQLAlchemyEnum(ExperienceLevel))
+    required_skills = Column(JSON, default=list)
+    preferred_skills = Column(JSON, default=list)
+    benefits = Column(JSON, default=list)
+    is_featured = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    expires_at = Column(DateTime)
+    employer_id = Column(String, ForeignKey("users.id"), nullable=False)
+    department = Column(String)
+    remote_work = Column(Boolean, default=False)
+    visa_sponsorship = Column(Boolean, default=False)
+    relocation_assistance = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    view_count = Column(Integer, default=0)
+
+    # Relationships
+    employer = relationship("User", back_populates="jobs")
+    applications = relationship("JobApplication", back_populates="job")
+    payments = relationship("Payment", back_populates="job")
+
+    def __repr__(self):
+        return f"<Job {self.title}>" 

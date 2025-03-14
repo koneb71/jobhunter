@@ -1,198 +1,156 @@
 from typing import Any, Dict, List, Optional, Union
-from supabase import Client
 from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import desc, or_, and_
 from app.core.logger import logger
 
 from app.crud.base import CRUDBase
-from app.models.job import Job
+from app.models.job import Job, JobType, ExperienceLevel
 from app.schemas.job import JobCreate, JobUpdate
 
 class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
-    async def get_by_company(
-        self, db: Client, *, company_id: str, skip: int = 0, limit: int = 100
+    def get_by_employer(
+        self, db: Session, *, employer_id: int, skip: int = 0, limit: int = 100
     ) -> List[Job]:
-        try:
-            response = await db.table("jobs").select("*").eq("company_id", company_id).range(skip, skip + limit - 1).execute()
-            return [Job(**item) for item in response.data]
-        except Exception as e:
-            logger.error(f"Error fetching company jobs: {str(e)}")
-            return []
+        return (
+            db.query(Job)
+            .filter(Job.employer_id == employer_id)
+            .order_by(desc(Job.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
-    async def get_featured(
-        self, db: Client, *, skip: int = 0, limit: int = 10
+    def get_featured(
+        self, db: Session, *, skip: int = 0, limit: int = 10
     ) -> List[Job]:
         """
         Get featured jobs that are active and not expired.
         """
-        try:
-            now = datetime.utcnow().isoformat()
-            response = await (
-                db.table("jobs")
-                .select("*")
-                .eq("is_featured", True)
-                .eq("is_active", True)
-                .is_("expires_at", None)
-                .or_(f"expires_at.gt.{now}")
-                .order("created_at", desc=True)
-                .range(skip, skip + limit - 1)
-                .execute()
+        now = datetime.utcnow()
+        return (
+            db.query(Job)
+            .filter(
+                Job.is_featured == True,
+                Job.is_active == True,
+                or_(Job.expires_at.is_(None), Job.expires_at > now)
             )
-            return [Job(**job) for job in response.data]
-        except Exception as e:
-            logger.error(f"Error fetching featured jobs: {str(e)}")
-            return []
+            .order_by(desc(Job.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
-    async def search(
+    def search(
         self,
-        db: Client,
+        db: Session,
         *,
         query: Optional[str] = None,
         location: Optional[str] = None,
-        job_type: Optional[str] = None,
-        experience_level: Optional[str] = None,
+        job_type: Optional[JobType] = None,
+        experience_level: Optional[ExperienceLevel] = None,
         salary_min: Optional[float] = None,
         salary_max: Optional[float] = None,
         remote_work: Optional[bool] = None,
         visa_sponsorship: Optional[bool] = None,
-        company_id: Optional[str] = None,
+        employer_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 10
     ) -> List[Job]:
         """
         Search jobs with multiple filters.
         """
-        try:
-            now = datetime.utcnow().isoformat()
-            query_builder = (
-                db.table("jobs")
-                .select("*")
-                .eq("is_active", True)
-                .is_("expires_at", None)
-                .or_(f"expires_at.gt.{now}")
-            )
+        now = datetime.utcnow()
+        filters = [
+            Job.is_active == True,
+            or_(Job.expires_at.is_(None), Job.expires_at > now)
+        ]
 
-            if query:
-                query_builder = query_builder.ilike("title", f"%{query}%")
-            if location:
-                query_builder = query_builder.ilike("location", f"%{location}%")
-            if job_type:
-                query_builder = query_builder.eq("job_type", job_type)
-            if experience_level:
-                query_builder = query_builder.eq("experience_level", experience_level)
-            if salary_min is not None:
-                query_builder = query_builder.gte("salary_min", salary_min)
-            if salary_max is not None:
-                query_builder = query_builder.lte("salary_max", salary_max)
-            if remote_work is not None:
-                query_builder = query_builder.eq("remote_work", remote_work)
-            if visa_sponsorship is not None:
-                query_builder = query_builder.eq("visa_sponsorship", visa_sponsorship)
-            if company_id:
-                query_builder = query_builder.eq("company_id", company_id)
+        if query:
+            filters.append(or_(
+                Job.title.ilike(f"%{query}%"),
+                Job.description.ilike(f"%{query}%")
+            ))
+        if location:
+            filters.append(Job.location.ilike(f"%{location}%"))
+        if job_type:
+            filters.append(Job.job_type == job_type)
+        if experience_level:
+            filters.append(Job.experience_level == experience_level)
+        if salary_min is not None:
+            filters.append(Job.salary_min >= salary_min)
+        if salary_max is not None:
+            filters.append(Job.salary_max <= salary_max)
+        if remote_work is not None:
+            filters.append(Job.remote_work == remote_work)
+        if visa_sponsorship is not None:
+            filters.append(Job.visa_sponsorship == visa_sponsorship)
+        if employer_id:
+            filters.append(Job.employer_id == employer_id)
 
-            response = await (
-                query_builder
-                .order("created_at", desc=True)
-                .range(skip, skip + limit - 1)
-                .execute()
-            )
-            return [Job(**job) for job in response.data]
-        except Exception as e:
-            logger.error(f"Error searching jobs: {str(e)}")
-            return []
+        return (
+            db.query(Job)
+            .filter(and_(*filters))
+            .order_by(desc(Job.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
-    async def create(
+    def create(
         self,
-        db: Client,
-        job: JobCreate,
-        employer_id: str
-    ) -> Optional[Job]:
+        db: Session,
+        *,
+        obj_in: JobCreate,
+        employer_id: int
+    ) -> Job:
         """Create a new job."""
-        try:
-            job_data = job.model_dump()
-            job_data["employer_id"] = employer_id
-            job_data["created_at"] = datetime.utcnow().isoformat()
-            job_data["status"] = "active"
-            
-            response = await db.table("jobs").insert(job_data).execute()
-            if not response.data:
-                return None
-            return Job(**response.data[0])
-        except Exception as e:
-            logger.error(f"Error creating job: {str(e)}")
-            return None
+        db_obj = Job(
+            title=obj_in.title,
+            description=obj_in.description,
+            location=obj_in.location,
+            salary_min=obj_in.salary_min,
+            salary_max=obj_in.salary_max,
+            job_type=obj_in.job_type,
+            experience_level=obj_in.experience_level,
+            required_skills=obj_in.required_skills,
+            preferred_skills=obj_in.preferred_skills,
+            benefits=obj_in.benefits,
+            is_featured=obj_in.is_featured,
+            is_active=True,
+            expires_at=obj_in.expires_at,
+            employer_id=employer_id,
+            department=obj_in.department,
+            remote_work=obj_in.remote_work,
+            visa_sponsorship=obj_in.visa_sponsorship,
+            relocation_assistance=obj_in.relocation_assistance,
+        )
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
 
-    async def update(
+    def update(
         self,
-        db: Client,
-        job_id: str,
-        job: JobUpdate
-    ) -> Optional[Job]:
+        db: Session,
+        *,
+        db_obj: Job,
+        obj_in: Union[JobUpdate, Dict[str, Any]]
+    ) -> Job:
         """Update a job."""
-        try:
-            update_data = job.model_dump(exclude_unset=True)
-            update_data["updated_at"] = datetime.utcnow().isoformat()
-            
-            response = await db.table("jobs").update(update_data).eq("id", job_id).execute()
-            if not response.data:
-                return None
-            return Job(**response.data[0])
-        except Exception as e:
-            logger.error(f"Error updating job {job_id}: {str(e)}")
-            return None
+        return super().update(db, db_obj=db_obj, obj_in=obj_in)
 
-    async def delete(
+    def delete(
         self,
-        db: Client,
-        job_id: str
-    ) -> bool:
+        db: Session,
+        *,
+        id: int
+    ) -> Optional[Job]:
         """Delete a job."""
-        try:
-            response = await db.table("jobs").delete().eq("id", job_id).execute()
-            return bool(response.data)
-        except Exception as e:
-            logger.error(f"Error deleting job {job_id}: {str(e)}")
-            return False
-
-    async def get_employer_jobs(
-        self,
-        db: Client,
-        employer_id: str,
-        skip: int = 0,
-        limit: int = 10
-    ) -> List[Job]:
-        """Get all jobs for an employer."""
-        try:
-            response = await db.table("jobs").select("*").eq("employer_id", employer_id).order("created_at", desc=True).range(skip, skip + limit - 1).execute()
-            return [Job(**job) for job in response.data]
-        except Exception as e:
-            logger.error(f"Error fetching employer jobs: {str(e)}")
-            return []
-
-    async def search_jobs(
-        self,
-        db: Client,
-        query: str,
-        location: Optional[str] = None,
-        skip: int = 0,
-        limit: int = 10
-    ) -> List[Job]:
-        """Search jobs by query and location."""
-        try:
-            # Build the query
-            db_query = db.table("jobs").select("*").eq("status", "active").gte("expires_at", datetime.utcnow().isoformat())
-            
-            # Add search conditions
-            if query:
-                db_query = db_query.or_(f"title.ilike.%{query}%,description.ilike.%{query}%")
-            if location:
-                db_query = db_query.ilike("location", f"%{location}%")
-            
-            # Execute the query
-            response = await db_query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
-            return [Job(**job) for job in response.data]
-        except Exception as e:
-            logger.error(f"Error searching jobs: {str(e)}")
-            return []
+        obj = db.query(Job).get(id)
+        if obj:
+            db.delete(obj)
+            db.commit()
+        return obj
 
 crud_job = CRUDJob(Job) 

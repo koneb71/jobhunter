@@ -1,6 +1,6 @@
 from typing import Any
 from fastapi import APIRouter, Depends, Query
-from supabase import Client
+from sqlalchemy.orm import Session
 
 from app.core.deps import get_db
 from app.schemas.search import (
@@ -27,7 +27,7 @@ def search(
     sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order"),
     page: int = Query(1, description="Page number", ge=1),
     page_size: int = Query(20, description="Items per page", ge=1, le=100),
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> Any:
     """
     Unified search endpoint for jobs and companies with advanced filtering and pagination.

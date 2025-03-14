@@ -1,26 +1,27 @@
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field
+from enum import Enum
+from pydantic import BaseModel, Field, ConfigDict
 
 from app.schemas.base import TimestampSchema
 
 class JobBase(BaseModel):
-    title: str = Field(..., min_length=1, max_length=200)
-    description: str = Field(..., min_length=1)
-    location: str = Field(..., min_length=1, max_length=100)
-    salary_min: Optional[float] = None
-    salary_max: Optional[float] = None
-    job_type: str = Field(..., min_length=1, max_length=50)  # full-time, part-time, contract, etc.
-    experience_level: Optional[str] = None
-    required_skills: List[str] = Field(default_factory=list)
-    preferred_skills: List[str] = Field(default_factory=list)
-    benefits: List[str] = Field(default_factory=list)
-    is_featured: bool = False
-    is_active: bool = True
-    expires_at: Optional[datetime] = None
+    title: str
+    description: str
+    company_id: str
+    location: str
+    salary_range: str | None = None
+    employment_type: str | None = None
+    experience_level: str | None = None
+    skills_required: list[str] | None = None
+    benefits: list[str] | None = None
+    is_remote: bool | None = None
+    is_featured: bool | None = None
+    status: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 class JobCreate(JobBase):
-    company_id: str = Field(..., min_length=1)
     department: Optional[str] = None
     remote_work: bool = False
     visa_sponsorship: bool = False
@@ -44,14 +45,13 @@ class Job(JobBase):
     visa_sponsorship: bool = False
     relocation_assistance: bool = False
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime
     created_by: str
     company_name: Optional[str] = None
     application_count: int = 0
     view_count: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class JobResponse(Job):
     pass

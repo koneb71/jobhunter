@@ -1,9 +1,9 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from supabase import Client
+from sqlalchemy.orm import Session
 
 from app.core.deps import get_db
-from app.core.security import get_current_active_user
+from app.api.deps import get_current_active_user
 from app.crud import crud_payment
 from app.models.user import User
 from app.schemas.payment import (
@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.get("/my-payments", response_model=List[PaymentResponse])
 def get_my_payments(
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -28,7 +28,7 @@ def get_my_payments(
 @router.get("/status/{status}", response_model=List[PaymentResponse])
 def get_payments_by_status(
     status: PaymentStatus,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -46,7 +46,7 @@ def get_payments_by_status(
 @router.get("/job/{job_id}", response_model=List[PaymentResponse])
 def get_job_payments(
     job_id: str,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     skip: int = 0,
     limit: int = 100,
@@ -64,7 +64,7 @@ def get_job_payments(
 @router.get("/{payment_id}", response_model=PaymentResponse)
 def get_payment(
     payment_id: str,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """
@@ -86,7 +86,7 @@ def get_payment(
 @router.post("/", response_model=PaymentResponse)
 def create_payment(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     payment_in: PaymentCreate,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -103,7 +103,7 @@ def create_payment(
 @router.put("/{payment_id}", response_model=PaymentResponse)
 def update_payment(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     payment_id: str,
     payment_in: PaymentUpdate,
     current_user: User = Depends(get_current_active_user),
@@ -127,7 +127,7 @@ def update_payment(
 @router.post("/{payment_id}/process", response_model=PaymentResponse)
 def process_payment(
     *,
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     payment_id: str,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:

@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
-from supabase import Client
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
 
 from app.crud.base import CRUDBase
 from app.models.notification import Notification
@@ -8,56 +9,55 @@ from app.schemas.notification import NotificationCreate, NotificationUpdate, Not
 
 class CRUDNotification(CRUDBase[Notification, NotificationCreate, NotificationUpdate]):
     def get_by_user(
-        self, db: Client, *, user_id: str, skip: int = 0, limit: int = 100
+        self, db: Session, *, user_id: str, skip: int = 0, limit: int = 100
     ) -> List[Notification]:
-        response = (
-            db.table("notifications")
-            .select("*")
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .range(skip, skip + limit - 1)
-            .execute()
+        return (
+            db.query(Notification)
+            .filter(Notification.user_id == user_id)
+            .order_by(desc(Notification.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
         )
-        return [Notification(**item) for item in response.data]
 
     def get_unread(
-        self, db: Client, *, user_id: str, skip: int = 0, limit: int = 100
+        self, db: Session, *, user_id: str, skip: int = 0, limit: int = 100
     ) -> List[Notification]:
-        response = (
-            db.table("notifications")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("status", NotificationStatus.UNREAD)
-            .order("created_at", desc=True)
-            .range(skip, skip + limit - 1)
-            .execute()
+        return (
+            db.query(Notification)
+            .filter(Notification.user_id == user_id)
+            .filter(Notification.status == NotificationStatus.UNREAD)
+            .order_by(desc(Notification.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
         )
-        return [Notification(**item) for item in response.data]
 
     def get_by_type(
-        self, db: Client, *, user_id: str, notification_type: str, skip: int = 0, limit: int = 100
+        self, db: Session, *, user_id: str, notification_type: str, skip: int = 0, limit: int = 100
     ) -> List[Notification]:
-        response = (
-            db.table("notifications")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("notification_type", notification_type)
-            .order("created_at", desc=True)
-            .range(skip, skip + limit - 1)
-            .execute()
+        return (
+            db.query(Notification)
+            .filter(Notification.user_id == user_id)
+            .filter(Notification.notification_type == notification_type)
+            .order_by(desc(Notification.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
         )
-        return [Notification(**item) for item in response.data]
 
     def create(
-        self, db: Client, *, obj_in: NotificationCreate
+        self, db: Session, *, obj_in: NotificationCreate
     ) -> Notification:
-        db_obj = obj_in.model_dump()
-        response = db.table("notifications").insert(db_obj).execute()
-        return Notification(**response.data[0])
+        db_obj = Notification(**obj_in.model_dump())
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
 
     def update(
         self,
-        db: Client,
+        db: Session,
         *,
         db_obj: Notification,
         obj_in: Union[NotificationUpdate, Dict[str, Any]]
@@ -70,16 +70,16 @@ class CRUDNotification(CRUDBase[Notification, NotificationCreate, NotificationUp
         if update_data.get("status") == NotificationStatus.READ:
             update_data["read_at"] = datetime.now()
         
-        response = (
-            db.table("notifications")
-            .update(update_data)
-            .eq("id", db_obj.id)
-            .execute()
-        )
-        return Notification(**response.data[0])
+        for field in update_data:
+            setattr(db_obj, field, update_data[field])
+        
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
 
     def mark_as_read(
-        self, db: Client, *, notification_id: str
+        self, db: Session, *, notification_id: str
     ) -> Notification:
         """
         Mark a notification as read
@@ -99,7 +99,7 @@ class CRUDNotification(CRUDBase[Notification, NotificationCreate, NotificationUp
         return self.update(db, db_obj=notification, obj_in=update_data)
 
     def mark_all_as_read(
-        self, db: Client, *, user_id: str
+        self, db: Session, *, user_id: str
     ) -> List[Notification]:
         """
         Mark all user's notifications as read

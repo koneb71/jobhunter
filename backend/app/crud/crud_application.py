@@ -1,94 +1,73 @@
 from typing import Any, Dict, List, Optional, Union
-from supabase import Client
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
 
 from app.crud.base import CRUDBase
-from app.models.application import Application
-from app.schemas.application import ApplicationCreate, ApplicationUpdate
+from app.models.job_application import JobApplication
+from app.schemas.job_application import JobApplicationCreate, JobApplicationUpdate, ApplicationStatus
 
-class CRUDApplication(CRUDBase[Application, ApplicationCreate, ApplicationUpdate]):
-    def get_by_user(
-        self, db: Client, *, user_id: str, skip: int = 0, limit: int = 100
-    ) -> List[Application]:
-        response = (
-            db.table("applications")
-            .select("*, jobs(title, companies(name))")
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .range(skip, skip + limit - 1)
-            .execute()
+class CRUDJobApplication(CRUDBase[JobApplication, JobApplicationCreate, JobApplicationUpdate]):
+    def get_by_applicant(
+        self, db: Session, *, applicant_id: str, skip: int = 0, limit: int = 100
+    ) -> List[JobApplication]:
+        return (
+            db.query(JobApplication)
+            .filter(JobApplication.applicant_id == applicant_id)
+            .order_by(desc(JobApplication.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
         )
-        applications = []
-        for item in response.data:
-            app_data = item.copy()
-            app_data["job_title"] = app_data.pop("jobs")["title"]
-            app_data["company_name"] = app_data["jobs"]["companies"]["name"]
-            applications.append(Application(**app_data))
-        return applications
 
     def get_by_job(
-        self, db: Client, *, job_id: str, skip: int = 0, limit: int = 100
-    ) -> List[Application]:
-        response = (
-            db.table("applications")
-            .select("*, users(full_name)")
-            .eq("job_id", job_id)
-            .order("created_at", desc=True)
-            .range(skip, skip + limit - 1)
-            .execute()
+        self, db: Session, *, job_id: str, skip: int = 0, limit: int = 100
+    ) -> List[JobApplication]:
+        return (
+            db.query(JobApplication)
+            .filter(JobApplication.job_id == job_id)
+            .order_by(desc(JobApplication.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
         )
-        applications = []
-        for item in response.data:
-            app_data = item.copy()
-            app_data["user_name"] = app_data.pop("users")["full_name"]
-            applications.append(Application(**app_data))
-        return applications
 
     def get_by_status(
-        self, db: Client, *, status: str, skip: int = 0, limit: int = 100
-    ) -> List[Application]:
-        response = (
-            db.table("applications")
-            .select("*, jobs(title, companies(name)), users(full_name)")
-            .eq("status", status)
-            .order("created_at", desc=True)
-            .range(skip, skip + limit - 1)
-            .execute()
+        self, db: Session, *, status: str, skip: int = 0, limit: int = 100
+    ) -> List[JobApplication]:
+        return (
+            db.query(JobApplication)
+            .filter(JobApplication.status == status)
+            .order_by(desc(JobApplication.created_at))
+            .offset(skip)
+            .limit(limit)
+            .all()
         )
-        applications = []
-        for item in response.data:
-            app_data = item.copy()
-            app_data["job_title"] = app_data.pop("jobs")["title"]
-            app_data["company_name"] = app_data["jobs"]["companies"]["name"]
-            app_data["user_name"] = app_data.pop("users")["full_name"]
-            applications.append(Application(**app_data))
-        return applications
 
     def create(
-        self, db: Client, *, obj_in: ApplicationCreate, user_id: str
-    ) -> Application:
-        db_obj = obj_in.model_dump()
-        db_obj["user_id"] = user_id
-        response = db.table("applications").insert(db_obj).execute()
-        return Application(**response.data[0])
+        self, db: Session, *, obj_in: JobApplicationCreate, applicant_id: str
+    ) -> JobApplication:
+        db_obj = JobApplication(
+            job_id=obj_in.job_id,
+            applicant_id=applicant_id,
+            cover_letter=obj_in.cover_letter,
+            resume_url=obj_in.resume_url,
+            status=ApplicationStatus.PENDING,
+            expected_salary=obj_in.expected_salary,
+            availability_date=obj_in.availability_date,
+            additional_info=obj_in.additional_info
+        )
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
 
     def update(
         self,
-        db: Client,
+        db: Session,
         *,
-        db_obj: Application,
-        obj_in: Union[ApplicationUpdate, Dict[str, Any]]
-    ) -> Application:
-        if isinstance(obj_in, dict):
-            update_data = obj_in
-        else:
-            update_data = obj_in.model_dump(exclude_unset=True)
-        
-        response = (
-            db.table("applications")
-            .update(update_data)
-            .eq("id", db_obj.id)
-            .execute()
-        )
-        return Application(**response.data[0])
+        db_obj: JobApplication,
+        obj_in: Union[JobApplicationUpdate, Dict[str, Any]]
+    ) -> JobApplication:
+        return super().update(db, db_obj=db_obj, obj_in=obj_in)
 
-crud_application = CRUDApplication(Application) 
+crud_job_application = CRUDJobApplication(JobApplication) 

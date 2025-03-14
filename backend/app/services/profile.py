@@ -4,7 +4,7 @@ from app.schemas.profile import (
     ProfileScore, ProfileStrength, SkillRating,
     SkillEndorsement, ProfileVerification, ProfileAnalytics
 )
-from app.schemas.user import User, ProfilePictureMetadata
+from app.schemas.user import UserResponse, ProfilePictureMetadata
 from PIL import Image
 import io
 import os
@@ -14,7 +14,7 @@ from app.core.config import settings
 
 class ProfileService:
     @staticmethod
-    def calculate_profile_score(user: User) -> ProfileScore:
+    def calculate_profile_score(user: UserResponse) -> ProfileScore:
         """Calculate profile completion score and strength."""
         total_fields = 0
         completed_fields = 0
@@ -23,17 +23,11 @@ class ProfileService:
 
         # Basic Information
         total_fields += 4
-        if user.first_name:
+        if user.full_name:
             completed_fields += 1
         else:
-            missing_fields.append("first_name")
-            recommendations.append("Add your first name")
-
-        if user.last_name:
-            completed_fields += 1
-        else:
-            missing_fields.append("last_name")
-            recommendations.append("Add your last name")
+            missing_fields.append("full_name")
+            recommendations.append("Add your full name")
 
         if user.email:
             completed_fields += 1
@@ -46,6 +40,12 @@ class ProfileService:
         else:
             missing_fields.append("phone")
             recommendations.append("Add your phone number")
+
+        if user.bio:
+            completed_fields += 1
+        else:
+            missing_fields.append("bio")
+            recommendations.append("Add your bio")
 
         # Professional Information
         total_fields += 3
@@ -223,6 +223,39 @@ class ProfileService:
             })
 
         return ProfileAnalytics(**analytics)
+
+    @staticmethod
+    def get_profile_completion(user: UserResponse) -> Dict[str, Any]:
+        """Calculate profile completion percentage and missing fields."""
+        required_fields = ["full_name", "email", "phone", "bio", "location"]
+        missing_fields = []
+        
+        # Check basic user fields
+        if not user.full_name:
+            missing_fields.append("full_name")
+        if not user.email:
+            missing_fields.append("email")
+        
+        # Check profile fields
+        if user.profile:
+            if not user.profile.phone:
+                missing_fields.append("phone")
+            if not user.profile.bio:
+                missing_fields.append("bio")
+            if not user.profile.location:
+                missing_fields.append("location")
+        else:
+            missing_fields.extend(["phone", "bio", "location"])
+        
+        # Calculate completion percentage
+        completed_fields = len(required_fields) - len(missing_fields)
+        completion_percentage = (completed_fields / len(required_fields)) * 100
+        
+        return {
+            "completion_percentage": completion_percentage,
+            "missing_fields": missing_fields,
+            "required_fields": required_fields
+        }
 
 # Profile picture settings
 PROFILE_PICTURE_SETTINGS = {

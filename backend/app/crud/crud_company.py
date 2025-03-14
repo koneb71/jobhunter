@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
-from supabase import Client
+from sqlalchemy.orm import Session
+from sqlalchemy import or_, and_
 
 from app.crud.base import CRUDBase
 from app.models.company import Company
@@ -7,34 +8,32 @@ from app.schemas.company import CompanyCreate, CompanyUpdate
 
 class CRUDCompany(CRUDBase[Company, CompanyCreate, CompanyUpdate]):
     def get_by_industry(
-        self, db: Client, *, industry: str, skip: int = 0, limit: int = 100
+        self, db: Session, *, industry: str, skip: int = 0, limit: int = 100
     ) -> List[Company]:
-        response = (
-            db.table("companies")
-            .select("*")
-            .eq("industry", industry)
-            .eq("is_active", True)
-            .range(skip, skip + limit - 1)
-            .execute()
+        return (
+            db.query(Company)
+            .filter(Company.industry == industry)
+            .filter(Company.is_active == True)
+            .offset(skip)
+            .limit(limit)
+            .all()
         )
-        return [Company(**item) for item in response.data]
 
     def get_by_location(
-        self, db: Client, *, location: str, skip: int = 0, limit: int = 100
+        self, db: Session, *, location: str, skip: int = 0, limit: int = 100
     ) -> List[Company]:
-        response = (
-            db.table("companies")
-            .select("*")
-            .ilike("location", f"%{location}%")
-            .eq("is_active", True)
-            .range(skip, skip + limit - 1)
-            .execute()
+        return (
+            db.query(Company)
+            .filter(Company.location.ilike(f"%{location}%"))
+            .filter(Company.is_active == True)
+            .offset(skip)
+            .limit(limit)
+            .all()
         )
-        return [Company(**item) for item in response.data]
 
     def search(
         self,
-        db: Client,
+        db: Session,
         *,
         query: str = "",
         industry: str = "",
@@ -42,31 +41,38 @@ class CRUDCompany(CRUDBase[Company, CompanyCreate, CompanyUpdate]):
         skip: int = 0,
         limit: int = 100
     ) -> List[Company]:
-        query_builder = db.table("companies").select("*")
+        filters = [Company.is_active == True]
         
         if query:
-            query_builder = query_builder.ilike("name", f"%{query}%")
+            filters.append(Company.name.ilike(f"%{query}%"))
         if industry:
-            query_builder = query_builder.eq("industry", industry)
+            filters.append(Company.industry == industry)
         if location:
-            query_builder = query_builder.ilike("location", f"%{location}%")
+            filters.append(Company.location.ilike(f"%{location}%"))
             
-        query_builder = query_builder.eq("is_active", True)
-        response = query_builder.range(skip, skip + limit - 1).execute()
-        
-        return [Company(**item) for item in response.data]
+        return (
+            db.query(Company)
+            .filter(and_(*filters))
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     def create(
-        self, db: Client, *, obj_in: CompanyCreate, user_id: str
+        self, db: Session, *, obj_in: CompanyCreate, user_id: str
     ) -> Company:
-        db_obj = obj_in.model_dump()
-        db_obj["created_by"] = user_id
-        response = db.table("companies").insert(db_obj).execute()
-        return Company(**response.data[0])
+        db_obj = Company(
+            **obj_in.model_dump(),
+            created_by=user_id
+        )
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
 
     def update(
         self,
-        db: Client,
+        db: Session,
         *,
         db_obj: Company,
         obj_in: Union[CompanyUpdate, Dict[str, Any]]
@@ -76,12 +82,12 @@ class CRUDCompany(CRUDBase[Company, CompanyCreate, CompanyUpdate]):
         else:
             update_data = obj_in.model_dump(exclude_unset=True)
         
-        response = (
-            db.table("companies")
-            .update(update_data)
-            .eq("id", db_obj.id)
-            .execute()
-        )
-        return Company(**response.data[0])
+        for field in update_data:
+            setattr(db_obj, field, update_data[field])
+        
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
 
 crud_company = CRUDCompany(Company) 

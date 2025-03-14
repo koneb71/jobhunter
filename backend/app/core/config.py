@@ -1,13 +1,16 @@
-from typing import List, Optional, Union
+import secrets
+from typing import Any, Dict, List, Optional, Union
+from pydantic import AnyHttpUrl, PostgresDsn, validator
 from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl, validator
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Settings(BaseSettings):
-    # API Settings
     PROJECT_NAME: str = "JobHunter"
-    DEBUG: bool = True
+    VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
     # CORS Configuration
@@ -21,14 +24,10 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
     
-    # Supabase Configuration
-    SUPABASE_URL: str = "your-supabase-url"
-    SUPABASE_KEY: str = "your-supabase-key"
-    
     # JWT Configuration
-    SECRET_KEY: str = "your-secret-key-here"  # Change this in production
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # File Upload Configuration
     UPLOAD_DIR: str = "uploads"
@@ -47,6 +46,31 @@ class Settings(BaseSettings):
     MAIL_SERVER: str = os.getenv("MAIL_SERVER", "smtp.gmail.com")
     MAIL_FROM_NAME: str = os.getenv("MAIL_FROM_NAME", "JobHunter")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    
+    # Database Configuration
+    POSTGRES_SERVER: str = os.getenv("POSTGRES_SERVER", "localhost")
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "postgres")
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "jobhunter")
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
+    
+    def get_database_url(self) -> str:
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+
+    # Email Configuration
+    SMTP_TLS: bool = True
+    SMTP_PORT: Optional[int] = None
+    SMTP_HOST: Optional[str] = None
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    EMAILS_FROM_EMAIL: Optional[str] = None
+    EMAILS_FROM_NAME: Optional[str] = None
+
+    # AWS Configuration
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    AWS_REGION: str = "us-east-1"
+    S3_BUCKET: Optional[str] = None
     
     # Create necessary directories
     def create_directories(self):

@@ -1,33 +1,28 @@
-from typing import Generator, Optional
+from typing import Generator
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from pydantic import ValidationError
-from supabase import Client, create_client
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import ALGORITHM
-from app.models.user import User
+from app.core.auth import ALGORITHM, oauth2_scheme
+from app.models.user import User, UserType
 from app.schemas.token import TokenPayload
+from app.db.session import SessionLocal
+from app.crud.crud_user import crud_user
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
-
-def get_db() -> Generator[Client, None, None]:
+def get_db() -> Generator[Session, None, None]:
     """
-    Get database client.
+    Get database session.
     """
     try:
-        client = create_client(
-            settings.SUPABASE_URL,
-            settings.SUPABASE_KEY
-        )
-        yield client
+        db = SessionLocal()
+        yield db
     finally:
-        # Clean up if needed
-        pass
+        db.close()
 
 async def get_current_user(
-    db: Client = Depends(get_db),
+    db: Session = Depends(get_db),
     token: str = Depends(oauth2_scheme)
 ) -> User:
     """
@@ -46,15 +41,20 @@ async def get_current_user(
     except (JWTError, ValidationError):
         raise credentials_exception
 
-    # Get user from database
-    response = await db.table("users").select("*").eq("id", token_data.sub).execute()
-    if not response.data:
+    user = crud_user.get(db, id=token_data.sub)
+    if not user:
         raise credentials_exception
-
-    user = User(**response.data[0])
-    if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
     return user
+
+async def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Get current active user.
+    """
+    if not current_user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user
 
 async def get_current_active_superuser(
     current_user: User = Depends(get_current_user),
@@ -74,7 +74,7 @@ def get_current_employer(
     """
     Get current employer user.
     """
-    if current_user.role != "employer":
+    if current_user.user_type != UserType.EMPLOYER:
         raise HTTPException(
             status_code=400, detail="The user is not an employer"
         )
@@ -86,7 +86,7 @@ def get_current_job_seeker(
     """
     Get current job seeker user.
     """
-    if current_user.role != "job_seeker":
+    if current_user.user_type != UserType.JOB_SEEKER:
         raise HTTPException(
             status_code=400, detail="The user is not a job seeker"
         )
