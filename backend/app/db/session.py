@@ -1,6 +1,8 @@
 from typing import Generator
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from app.core.config import settings
 
 # Get database URL as string
@@ -18,6 +20,7 @@ engine = create_engine(
 # Create SessionLocal class for database sessions
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 def get_db() -> Generator:
     """
     Get database session.
@@ -26,4 +29,4 @@ def get_db() -> Generator:
         db = SessionLocal()
         yield db
     finally:
-        db.close() 
+        db.close()

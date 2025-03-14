@@ -1,15 +1,21 @@
-from datetime import datetime
-from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLAlchemyEnum, Integer
-from sqlalchemy.orm import relationship
-from app.db.base_class import Base
 import uuid
+from datetime import datetime
 from enum import Enum
+
+from sqlalchemy import Column, DateTime
+from sqlalchemy import Enum as SQLAlchemyEnum
+from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
+
+from app.db.base_class import Base
+
 
 class InterviewStatus(str, Enum):
     SCHEDULED = "scheduled"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
     NO_SHOW = "no_show"
+
 
 class InterviewType(str, Enum):
     PHONE = "phone"
@@ -19,6 +25,7 @@ class InterviewType(str, Enum):
     BEHAVIORAL = "behavioral"
     FINAL = "final"
 
+
 class Interview(Base):
     __tablename__ = "interviews"
 
@@ -27,7 +34,11 @@ class Interview(Base):
     scheduled_at = Column(DateTime, nullable=False)
     duration_minutes = Column(Integer, nullable=False, default=60)
     interview_type = Column(SQLAlchemyEnum(InterviewType), nullable=False)
-    status = Column(SQLAlchemyEnum(InterviewStatus), nullable=False, default=InterviewStatus.SCHEDULED)
+    status = Column(
+        SQLAlchemyEnum(InterviewStatus),
+        nullable=False,
+        default=InterviewStatus.SCHEDULED,
+    )
     meeting_link = Column(String, nullable=True)
     location = Column(String, nullable=True)
     notes = Column(String, nullable=True)
@@ -38,4 +49,4 @@ class Interview(Base):
     application = relationship("JobApplication", back_populates="interviews")
 
     def __repr__(self):
-        return f"<Interview {self.id} - {self.status}>" 
+        return f"<Interview {self.id} - {self.status}>"

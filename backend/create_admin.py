@@ -1,10 +1,12 @@
 import typer
 from sqlalchemy.orm import Session
-from app.db.session import SessionLocal
+
 from app.crud.crud_user import crud_user
+from app.db.session import SessionLocal
 from app.schemas.user import UserCreate, UserType
 
 app = typer.Typer()
+
 
 def create_admin_user(
     email: str,
@@ -31,6 +33,7 @@ def create_admin_user(
     finally:
         db.close()
 
+
 @app.command()
 def create_admin(
     email: str = typer.Option(..., help="Admin user's email"),
@@ -42,5 +45,6 @@ def create_admin(
     """Create a new admin user."""
     create_admin_user(email, password, first_name, last_name, display_name)
 
+
 if __name__ == "__main__":
-    app() 
+    app()

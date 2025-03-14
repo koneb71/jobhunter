@@ -1,6 +1,5 @@
-from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+
 
 class DashboardStats(BaseModel):
     total_jobs: int
@@ -9,6 +8,7 @@ class DashboardStats(BaseModel):
     new_applications: int
     total_candidates: int
     upcoming_interviews: int
+
 
 class DashboardJob(BaseModel):
     id: str
@@ -19,6 +19,7 @@ class DashboardJob(BaseModel):
     applications_count: int
     status: str
 
+
 class DashboardCandidate(BaseModel):
     id: str
     name: str
@@ -27,12 +28,14 @@ class DashboardCandidate(BaseModel):
     applied_date: str
     status: str
 
+
 class ApplicationTrend(BaseModel):
     date: str
     applications: int
     interviews: int
     offers: int
 
+
 class ApplicationStatusDistribution(BaseModel):
     name: str
-    value: int 
+    value: int

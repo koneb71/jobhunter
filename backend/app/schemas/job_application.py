@@ -1,8 +1,9 @@
-from typing import Optional
 from datetime import datetime
-from uuid import UUID
-from pydantic import BaseModel, ConfigDict
 from enum import Enum
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
+
 
 class ApplicationStatus(str, Enum):
     PENDING = "pending"
@@ -14,6 +15,7 @@ class ApplicationStatus(str, Enum):
     REJECTED = "rejected"
     WITHDRAWN = "withdrawn"
 
+
 class JobApplicationBase(BaseModel):
     cover_letter: Optional[str] = None
     resume_url: Optional[str] = None
@@ -22,11 +24,14 @@ class JobApplicationBase(BaseModel):
     availability_date: Optional[datetime] = None
     additional_info: Optional[dict] = None
 
+
 class JobApplicationCreate(JobApplicationBase):
     job_id: str
 
+
 class JobApplicationUpdate(JobApplicationBase):
     pass
+
 
 class JobApplicationResponse(JobApplicationBase):
     id: str
@@ -35,4 +40,4 @@ class JobApplicationResponse(JobApplicationBase):
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True) 
+    model_config = ConfigDict(from_attributes=True)

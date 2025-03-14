@@ -1,8 +1,11 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, JSON, DateTime
-from sqlalchemy.orm import relationship
-from datetime import datetime
-from app.db.base_class import Base
 import uuid
+from datetime import datetime
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
+
+from app.db.base_class import Base
+
 
 class Profile(Base):
     __tablename__ = "profiles"
@@ -34,4 +37,4 @@ class Profile(Base):
     user = relationship("User", back_populates="profile")
 
     def __repr__(self):
-        return f"<Profile {self.user_id}>" 
+        return f"<Profile {self.user_id}>"

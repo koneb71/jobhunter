@@ -1,13 +1,14 @@
-from typing import Optional, List
+import uuid
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import (
-    Boolean, Column, Integer, String, Text, 
-    ForeignKey, DateTime, Enum as SQLAlchemyEnum, Float, JSON
-)
+
+from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import Enum as SQLAlchemyEnum
+from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
+
 from app.db.base_class import Base
-import uuid
+
 
 class JobType(str, Enum):
     FULL_TIME = "full_time"
@@ -16,6 +17,7 @@ class JobType(str, Enum):
     INTERNSHIP = "internship"
     FREELANCE = "freelance"
 
+
 class ExperienceLevel(str, Enum):
     ENTRY = "entry"
     JUNIOR = "junior"
@@ -23,6 +25,7 @@ class ExperienceLevel(str, Enum):
     SENIOR = "senior"
     LEAD = "lead"
     EXECUTIVE = "executive"
+
 
 class Job(Base):
     __tablename__ = "jobs"
@@ -56,4 +59,4 @@ class Job(Base):
     payments = relationship("Payment", back_populates="job")
 
     def __repr__(self):
-        return f"<Job {self.title}>" 
+        return f"<Job {self.title}>"

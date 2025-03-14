@@ -1,17 +1,22 @@
 from typing import Any, List
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_db
 from app.api.deps import get_current_active_user
+from app.core.deps import get_db
 from app.crud import crud_payment
 from app.models.user import User
 from app.schemas.payment import (
-    PaymentCreate, PaymentResponse, PaymentUpdate,
-    PaymentStatus, PaymentType
+    PaymentCreate,
+    PaymentResponse,
+    PaymentStatus,
+    PaymentType,
+    PaymentUpdate,
 )
 
 router = APIRouter()
+
 
 @router.get("/my-payments", response_model=List[PaymentResponse])
 def get_my_payments(
@@ -24,6 +29,7 @@ def get_my_payments(
     Get current user's payments.
     """
     return crud_payment.get_by_user(db, user_id=current_user.id, skip=skip, limit=limit)
+
 
 @router.get("/status/{status}", response_model=List[PaymentResponse])
 def get_payments_by_status(
@@ -43,6 +49,7 @@ def get_payments_by_status(
         )
     return crud_payment.get_by_status(db, status=status, skip=skip, limit=limit)
 
+
 @router.get("/job/{job_id}", response_model=List[PaymentResponse])
 def get_job_payments(
     job_id: str,
@@ -60,6 +67,7 @@ def get_job_payments(
             detail="Not enough permissions",
         )
     return crud_payment.get_by_job(db, job_id=job_id, skip=skip, limit=limit)
+
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
 def get_payment(
@@ -83,6 +91,7 @@ def get_payment(
         )
     return payment
 
+
 @router.post("/", response_model=PaymentResponse)
 def create_payment(
     *,
@@ -99,6 +108,7 @@ def create_payment(
             detail="Not enough permissions",
         )
     return crud_payment.create(db, obj_in=payment_in)
+
 
 @router.put("/{payment_id}", response_model=PaymentResponse)
 def update_payment(
@@ -124,6 +134,7 @@ def update_payment(
         )
     return crud_payment.update(db, db_obj=payment, obj_in=payment_in)
 
+
 @router.post("/{payment_id}/process", response_model=PaymentResponse)
 def process_payment(
     *,
@@ -145,4 +156,4 @@ def process_payment(
         raise HTTPException(
             status_code=400,
             detail=str(e),
-        ) 
+        )

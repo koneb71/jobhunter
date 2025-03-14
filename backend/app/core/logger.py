@@ -12,17 +12,12 @@ logger.setLevel(logging.INFO)
 
 # Create formatters
 file_formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-console_formatter = logging.Formatter(
-    '%(levelname)s: %(message)s'
-)
+console_formatter = logging.Formatter("%(levelname)s: %(message)s")
 
 # File handler
-file_handler = logging.FileHandler(
-    filename=logs_dir / "app.log",
-    encoding="utf-8"
-)
+file_handler = logging.FileHandler(filename=logs_dir / "app.log", encoding="utf-8")
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(file_formatter)
 
@@ -39,4 +34,4 @@ logger.addHandler(console_handler)
 logger.propagate = False
 
 # Export logger
-__all__ = ["logger"] 
+__all__ = ["logger"]

@@ -1,0 +1,5 @@
+[flake8]
+ignore = E226,E302,E41,C901,F401,E402,W605,W503,E711,E712,E501,W293,F403
+max-line-length = 110
+exclude = tests/* venv/* sqldata/tests/*
+max-complexity = 10

@@ -1,11 +1,13 @@
-from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Union
+
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
 
 from app.crud.base import CRUDBase
 from app.models.payment import Payment
-from app.schemas.payment import PaymentCreate, PaymentUpdate, PaymentStatus
+from app.schemas.payment import PaymentCreate, PaymentStatus, PaymentUpdate
+
 
 class CRUDPayment(CRUDBase[Payment, PaymentCreate, PaymentUpdate]):
     def get_by_user(
@@ -44,12 +46,10 @@ class CRUDPayment(CRUDBase[Payment, PaymentCreate, PaymentUpdate]):
             .all()
         )
 
-    def create(
-        self, db: Session, *, obj_in: PaymentCreate
-    ) -> Payment:
+    def create(self, db: Session, *, obj_in: PaymentCreate) -> Payment:
         db_obj = Payment(
             **obj_in.model_dump(),
-            transaction_id=f"TXN_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            transaction_id=f"TXN_{datetime.now().strftime('%Y%m%d%H%M%S')}",
         )
         db.add(db_obj)
         db.commit()
@@ -61,19 +61,19 @@ class CRUDPayment(CRUDBase[Payment, PaymentCreate, PaymentUpdate]):
         db: Session,
         *,
         db_obj: Payment,
-        obj_in: Union[PaymentUpdate, Dict[str, Any]]
+        obj_in: Union[PaymentUpdate, Dict[str, Any]],
     ) -> Payment:
         if isinstance(obj_in, dict):
             update_data = obj_in
         else:
             update_data = obj_in.model_dump(exclude_unset=True)
-        
+
         if update_data.get("status") == PaymentStatus.COMPLETED:
             update_data["payment_date"] = datetime.now()
-        
+
         for field in update_data:
             setattr(db_obj, field, update_data[field])
-        
+
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
@@ -86,17 +86,18 @@ class CRUDPayment(CRUDBase[Payment, PaymentCreate, PaymentUpdate]):
         payment = self.get(db, id=payment_id)
         if not payment:
             raise ValueError("Payment not found")
-        
+
         if payment.status != PaymentStatus.PENDING:
             raise ValueError("Payment is not in pending status")
-        
+
         # Simulate payment processing
         update_data = {
             "status": PaymentStatus.COMPLETED,
             "payment_date": datetime.now(),
-            "description": "Payment processed successfully"
+            "description": "Payment processed successfully",
         }
-        
+
         return self.update(db, db_obj=payment, obj_in=update_data)
 
-crud_payment = CRUDPayment(Payment) 
+
+crud_payment = CRUDPayment(Payment)

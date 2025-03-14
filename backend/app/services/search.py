@@ -1,17 +1,24 @@
-from typing import List, Optional, Tuple, Dict, Any
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, desc, func, text
+from typing import Any, Dict, List
 
-from app.crud import crud_job, crud_company
-from app.models.job import Job
+from sqlalchemy import and_, desc, func, or_, text
+from sqlalchemy.orm import Session
+
+from app.crud import crud_company, crud_job
 from app.models.company import Company
+from app.models.job import Job
 from app.models.user import User
-from app.schemas.search import (
-    SearchParams, SearchResponse, PaginationInfo,
-    JobType, ExperienceLevel, SortBy, SortOrder
-)
 from app.schemas.profile import SearchCriteria, SearchResult
+from app.schemas.search import (
+    ExperienceLevel,
+    JobType,
+    PaginationInfo,
+    SearchParams,
+    SearchResponse,
+    SortBy,
+    SortOrder,
+)
+
 
 class SearchService:
     def __init__(self):
@@ -31,35 +38,35 @@ class SearchService:
             query = query.filter(
                 or_(
                     Job.title.ilike(f"%{params.query}%"),
-                    Job.description.ilike(f"%{params.query}%")
+                    Job.description.ilike(f"%{params.query}%"),
                 )
             )
-        
+
         if params.job_type:
             query = query.filter(Job.job_type == params.job_type)
-        
+
         if params.experience_level:
             query = query.filter(Job.experience_level == params.experience_level)
-        
+
         if params.location:
             query = query.filter(Job.location.ilike(f"%{params.location}%"))
-        
+
         if params.industry:
             query = query.join(Company).filter(Company.industry == params.industry)
-        
+
         if params.salary_min is not None:
             query = query.filter(Job.salary_min >= params.salary_min)
-        
+
         if params.salary_max is not None:
             query = query.filter(Job.salary_max <= params.salary_max)
-        
+
         if params.remote_only:
             query = query.filter(Job.is_remote == True)
-        
+
         if params.posted_within_days:
             cutoff_date = datetime.now() - timedelta(days=params.posted_within_days)
             query = query.filter(Job.created_at >= cutoff_date)
-        
+
         if params.company_size:
             query = query.join(Company).filter(Company.size == params.company_size)
 
@@ -71,16 +78,16 @@ class SearchService:
             query = query.filter(
                 or_(
                     Company.name.ilike(f"%{params.query}%"),
-                    Company.description.ilike(f"%{params.query}%")
+                    Company.description.ilike(f"%{params.query}%"),
                 )
             )
-        
+
         if params.industry:
             query = query.filter(Company.industry == params.industry)
-        
+
         if params.location:
             query = query.filter(Company.location.ilike(f"%{params.location}%"))
-        
+
         if params.company_size:
             query = query.filter(Company.size == params.company_size)
 
@@ -89,19 +96,35 @@ class SearchService:
     def _apply_sorting(self, query, params: SearchParams):
         """Apply sorting to query"""
         if params.sort_by == SortBy.DATE:
-            query = query.order_by(desc(Job.created_at) if params.sort_order == SortOrder.DESC else Job.created_at)
+            query = query.order_by(
+                desc(Job.created_at)
+                if params.sort_order == SortOrder.DESC
+                else Job.created_at
+            )
         elif params.sort_by == SortBy.SALARY:
-            query = query.order_by(desc(Job.salary_min) if params.sort_order == SortOrder.DESC else Job.salary_min)
+            query = query.order_by(
+                desc(Job.salary_min)
+                if params.sort_order == SortOrder.DESC
+                else Job.salary_min
+            )
         elif params.sort_by == SortBy.TITLE:
-            query = query.order_by(desc(Job.title) if params.sort_order == SortOrder.DESC else Job.title)
+            query = query.order_by(
+                desc(Job.title) if params.sort_order == SortOrder.DESC else Job.title
+            )
         elif params.sort_by == SortBy.COMPANY:
-            query = query.join(Company).order_by(desc(Company.name) if params.sort_order == SortOrder.DESC else Company.name)
+            query = query.join(Company).order_by(
+                desc(Company.name)
+                if params.sort_order == SortOrder.DESC
+                else Company.name
+            )
         else:  # relevance
             query = query.order_by(desc(Job.created_at))
-        
+
         return query
 
-    def _get_pagination_info(self, total_items: int, page: int, page_size: int) -> PaginationInfo:
+    def _get_pagination_info(
+        self, total_items: int, page: int, page_size: int
+    ) -> PaginationInfo:
         """Calculate pagination information"""
         total_pages = (total_items + page_size - 1) // page_size
         return PaginationInfo(
@@ -110,7 +133,7 @@ class SearchService:
             total_items=total_items,
             has_next=page < total_pages,
             has_previous=page > 1,
-            page_size=page_size
+            page_size=page_size,
         )
 
     def search(self, db: Session, params: SearchParams) -> SearchResponse:
@@ -118,28 +141,28 @@ class SearchService:
         Perform a unified search across jobs and companies with pagination and advanced filtering.
         """
         self._start_timer()
-        
+
         # Calculate pagination offsets
         skip = (params.page - 1) * params.page_size
-        
+
         # Build and execute job search query
         job_query = db.query(Job).join(Company)
         job_query = self._apply_job_filters(job_query, params)
         job_query = self._apply_sorting(job_query, params)
-        
+
         # Get total count for pagination
         total_jobs = job_query.count()
-        
+
         # Apply pagination
         jobs = job_query.offset(skip).limit(params.page_size).all()
-        
+
         # Build and execute company search query
         company_query = db.query(Company)
         company_query = self._apply_company_filters(company_query, params)
-        
+
         # Get total count for pagination
         total_companies = company_query.count()
-        
+
         # Apply pagination
         companies = company_query.offset(skip).limit(params.page_size).all()
 
@@ -147,7 +170,7 @@ class SearchService:
         pagination = self._get_pagination_info(
             total_items=max(total_jobs, total_companies),
             page=params.page,
-            page_size=params.page_size
+            page_size=params.page_size,
         )
 
         # Prepare active filters for response
@@ -156,13 +179,14 @@ class SearchService:
             "experience_level": params.experience_level,
             "location": params.location,
             "industry": params.industry,
-            "salary_range": {
-                "min": params.salary_min,
-                "max": params.salary_max
-            } if params.salary_min or params.salary_max else None,
+            "salary_range": (
+                {"min": params.salary_min, "max": params.salary_max}
+                if params.salary_min or params.salary_max
+                else None
+            ),
             "remote_only": params.remote_only,
             "posted_within_days": params.posted_within_days,
-            "company_size": params.company_size
+            "company_size": params.company_size,
         }
 
         return SearchResponse(
@@ -170,7 +194,7 @@ class SearchService:
             companies=companies,
             pagination=pagination,
             took_ms=self._get_elapsed_time(),
-            filters=active_filters
+            filters=active_filters,
         )
 
     @staticmethod
@@ -185,11 +209,16 @@ class SearchService:
 
         # Experience years
         if criteria.experience_years:
-            query = query.filter(User.work_experience["years_of_experience"].astext.cast(int) >= criteria.experience_years)
+            query = query.filter(
+                User.work_experience["years_of_experience"].astext.cast(int)
+                >= criteria.experience_years
+            )
 
         # Education level
         if criteria.education_level:
-            query = query.filter(User.education["degree"].contains([criteria.education_level]))
+            query = query.filter(
+                User.education["degree"].contains([criteria.education_level])
+            )
 
         # Location
         if criteria.location:
@@ -197,23 +226,49 @@ class SearchService:
 
         # Employment preferences
         if criteria.employment_type:
-            query = query.filter(User.employment_preferences["preferred_employment_types"].contains([criteria.employment_type]))
+            query = query.filter(
+                User.employment_preferences["preferred_employment_types"].contains(
+                    [criteria.employment_type]
+                )
+            )
 
         if criteria.work_schedule:
-            query = query.filter(User.employment_preferences["preferred_work_schedule"].contains([criteria.work_schedule]))
+            query = query.filter(
+                User.employment_preferences["preferred_work_schedule"].contains(
+                    [criteria.work_schedule]
+                )
+            )
 
         if criteria.company_size:
-            query = query.filter(User.employment_preferences["preferred_company_size"].contains([criteria.company_size]))
+            query = query.filter(
+                User.employment_preferences["preferred_company_size"].contains(
+                    [criteria.company_size]
+                )
+            )
 
         if criteria.benefits:
-            query = query.filter(User.employment_preferences["preferred_benefits"].contains([criteria.benefits]))
+            query = query.filter(
+                User.employment_preferences["preferred_benefits"].contains(
+                    [criteria.benefits]
+                )
+            )
 
         # Salary range
         if criteria.salary_range:
             if "min" in criteria.salary_range:
-                query = query.filter(User.employment_preferences["preferred_salary_range"]["min"].astext.cast(int) >= criteria.salary_range["min"])
+                query = query.filter(
+                    User.employment_preferences["preferred_salary_range"][
+                        "min"
+                    ].astext.cast(int)
+                    >= criteria.salary_range["min"]
+                )
             if "max" in criteria.salary_range:
-                query = query.filter(User.employment_preferences["preferred_salary_range"]["max"].astext.cast(int) <= criteria.salary_range["max"])
+                query = query.filter(
+                    User.employment_preferences["preferred_salary_range"][
+                        "max"
+                    ].astext.cast(int)
+                    <= criteria.salary_range["max"]
+                )
 
         # Availability
         if criteria.availability:
@@ -233,12 +288,16 @@ class SearchService:
         if criteria.keywords:
             keyword_conditions = []
             for keyword in criteria.keywords.split():
-                keyword_conditions.extend([
-                    User.tagline.ilike(f"%{keyword}%"),
-                    User.profile_overview.ilike(f"%{keyword}%"),
-                    User.work_experience["description"].astext.ilike(f"%{keyword}%"),
-                    User.education["description"].astext.ilike(f"%{keyword}%")
-                ])
+                keyword_conditions.extend(
+                    [
+                        User.tagline.ilike(f"%{keyword}%"),
+                        User.profile_overview.ilike(f"%{keyword}%"),
+                        User.work_experience["description"].astext.ilike(
+                            f"%{keyword}%"
+                        ),
+                        User.education["description"].astext.ilike(f"%{keyword}%"),
+                    ]
+                )
             query = query.filter(or_(*keyword_conditions))
 
         # Sorting
@@ -267,7 +326,11 @@ class SearchService:
         # Experience match (weight: 20)
         if criteria.experience_years:
             total_years = sum(
-                (datetime.fromisoformat(exp["end_date"]) - datetime.fromisoformat(exp["start_date"])).days / 365.25
+                (
+                    datetime.fromisoformat(exp["end_date"])
+                    - datetime.fromisoformat(exp["start_date"])
+                ).days
+                / 365.25
                 for exp in user.work_experience
                 if exp.get("end_date")
             )
@@ -282,8 +345,13 @@ class SearchService:
             total_weights += 15
 
         # Employment preferences match (weight: 15)
-        if criteria.employment_type and user.employment_preferences.preferred_employment_types:
-            matching_types = set(criteria.employment_type) & set(user.employment_preferences.preferred_employment_types)
+        if (
+            criteria.employment_type
+            and user.employment_preferences.preferred_employment_types
+        ):
+            matching_types = set(criteria.employment_type) & set(
+                user.employment_preferences.preferred_employment_types
+            )
             if matching_types:
                 score += 15 * (len(matching_types) / len(criteria.employment_type))
             total_weights += 15
@@ -300,7 +368,9 @@ class SearchService:
 
         # Languages match (weight: 10)
         if criteria.languages and user.languages:
-            matching_languages = set(criteria.languages) & {lang["language"] for lang in user.languages}
+            matching_languages = set(criteria.languages) & {
+                lang["language"] for lang in user.languages
+            }
             if matching_languages:
                 score += 10 * (len(matching_languages) / len(criteria.languages))
             total_weights += 10
@@ -317,10 +387,7 @@ class SearchService:
         suggestions = set()
 
         # Skills suggestions
-        skills_response = (
-            db.query(User.skills)
-            .execute()
-        )
+        skills_response = db.query(User.skills).execute()
         for user in skills_response.scalars():
             if user:
                 for skill in user:
@@ -328,19 +395,13 @@ class SearchService:
                         suggestions.add(skill)
 
         # Location suggestions
-        locations_response = (
-            db.query(User.location)
-            .execute()
-        )
+        locations_response = db.query(User.location).execute()
         for user in locations_response.scalars():
             if user and query.lower() in user.lower():
                 suggestions.add(user)
 
         # Education suggestions
-        education_response = (
-            db.query(User.education)
-            .execute()
-        )
+        education_response = db.query(User.education).execute()
         for user in education_response.scalars():
             if user:
                 for edu in user:
@@ -359,7 +420,7 @@ class SearchService:
             "employment_types": {},
             "work_schedules": {},
             "company_sizes": {},
-            "benefits": {}
+            "benefits": {},
         }
 
         # Get all users
@@ -374,27 +435,37 @@ class SearchService:
 
             # Count locations
             if user.location:
-                facets["locations"][user.location] = facets["locations"].get(user.location, 0) + 1
+                facets["locations"][user.location] = (
+                    facets["locations"].get(user.location, 0) + 1
+                )
 
             # Count education levels
             if user.education:
                 for edu in user.education:
                     if edu.get("degree"):
-                        facets["education_levels"][edu["degree"]] = facets["education_levels"].get(edu["degree"], 0) + 1
+                        facets["education_levels"][edu["degree"]] = (
+                            facets["education_levels"].get(edu["degree"], 0) + 1
+                        )
 
             # Count employment preferences
             prefs = user.employment_preferences
             if prefs.preferred_employment_types:
                 for emp_type in prefs.preferred_employment_types:
-                    facets["employment_types"][emp_type] = facets["employment_types"].get(emp_type, 0) + 1
+                    facets["employment_types"][emp_type] = (
+                        facets["employment_types"].get(emp_type, 0) + 1
+                    )
 
             if prefs.preferred_work_schedule:
                 for schedule in prefs.preferred_work_schedule:
-                    facets["work_schedules"][schedule] = facets["work_schedules"].get(schedule, 0) + 1
+                    facets["work_schedules"][schedule] = (
+                        facets["work_schedules"].get(schedule, 0) + 1
+                    )
 
             if prefs.preferred_company_size:
                 for size in prefs.preferred_company_size:
-                    facets["company_sizes"][size] = facets["company_sizes"].get(size, 0) + 1
+                    facets["company_sizes"][size] = (
+                        facets["company_sizes"].get(size, 0) + 1
+                    )
 
             if prefs.preferred_benefits:
                 for benefit in prefs.preferred_benefits:
@@ -402,4 +473,5 @@ class SearchService:
 
         return facets
 
-search_service = SearchService() 
+
+search_service = SearchService()

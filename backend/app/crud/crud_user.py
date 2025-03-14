@@ -1,12 +1,14 @@
-from typing import Any, Dict, Optional, Union, List
-from datetime import datetime
-from sqlalchemy.orm import Session
+import uuid
+from typing import Any, Dict, List, Optional, Union
+
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
+
+from app.core.password import get_password_hash, verify_password
 from app.crud.base import CRUDBase
 from app.models.user import User, UserType
 from app.schemas.user import UserCreate, UserUpdate
-from app.core.password import get_password_hash, verify_password
-import uuid
+
 
 class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
     def get_by_email(self, db: Session, *, email: str) -> Optional[User]:
@@ -29,7 +31,7 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         existing_user = self.get_by_email(db, email=obj_in.email)
         if existing_user:
             raise ValueError("Email already registered")
-            
+
         db_obj = User(
             id=str(uuid.uuid4()),
             email=obj_in.email,
@@ -72,4 +74,5 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
     def is_superuser(self, user: User) -> bool:
         return user.is_superuser
 
-crud_user = CRUDUser(User) 
+
+crud_user = CRUDUser(User)

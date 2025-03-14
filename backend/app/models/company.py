@@ -1,6 +1,8 @@
-from typing import Optional
-from pydantic import BaseModel, HttpUrl
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, HttpUrl
+
 
 class Company(BaseModel):
     id: str
@@ -14,4 +16,4 @@ class Company(BaseModel):
     is_active: bool = True
     created_by: str
     created_at: datetime
-    updated_at: datetime 
+    updated_at: datetime

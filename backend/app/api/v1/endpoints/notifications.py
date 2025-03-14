@@ -1,17 +1,22 @@
 from typing import Any, List
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_db
 from app.api.deps import get_current_active_user
+from app.core.deps import get_db
 from app.crud import crud_notification
 from app.models.user import User
 from app.schemas.notification import (
-    NotificationCreate, NotificationResponse, NotificationUpdate,
-    NotificationType, NotificationStatus
+    NotificationCreate,
+    NotificationResponse,
+    NotificationStatus,
+    NotificationType,
+    NotificationUpdate,
 )
 
 router = APIRouter()
+
 
 @router.get("/my-notifications", response_model=List[NotificationResponse])
 def get_my_notifications(
@@ -23,7 +28,10 @@ def get_my_notifications(
     """
     Get current user's notifications.
     """
-    return crud_notification.get_by_user(db, user_id=current_user.id, skip=skip, limit=limit)
+    return crud_notification.get_by_user(
+        db, user_id=current_user.id, skip=skip, limit=limit
+    )
+
 
 @router.get("/unread", response_model=List[NotificationResponse])
 def get_unread_notifications(
@@ -35,7 +43,10 @@ def get_unread_notifications(
     """
     Get current user's unread notifications.
     """
-    return crud_notification.get_unread(db, user_id=current_user.id, skip=skip, limit=limit)
+    return crud_notification.get_unread(
+        db, user_id=current_user.id, skip=skip, limit=limit
+    )
+
 
 @router.get("/type/{notification_type}", response_model=List[NotificationResponse])
 def get_notifications_by_type(
@@ -49,8 +60,13 @@ def get_notifications_by_type(
     Get current user's notifications by type.
     """
     return crud_notification.get_by_type(
-        db, user_id=current_user.id, notification_type=notification_type, skip=skip, limit=limit
+        db,
+        user_id=current_user.id,
+        notification_type=notification_type,
+        skip=skip,
+        limit=limit,
     )
+
 
 @router.get("/{notification_id}", response_model=NotificationResponse)
 def get_notification(
@@ -74,6 +90,7 @@ def get_notification(
         )
     return notification
 
+
 @router.post("/", response_model=NotificationResponse)
 def create_notification(
     *,
@@ -90,6 +107,7 @@ def create_notification(
             detail="Not enough permissions",
         )
     return crud_notification.create(db, obj_in=notification_in)
+
 
 @router.put("/{notification_id}", response_model=NotificationResponse)
 def update_notification(
@@ -114,6 +132,7 @@ def update_notification(
             detail="Not enough permissions",
         )
     return crud_notification.update(db, db_obj=notification, obj_in=notification_in)
+
 
 @router.post("/{notification_id}/read", response_model=NotificationResponse)
 def mark_notification_as_read(
@@ -144,6 +163,7 @@ def mark_notification_as_read(
             detail=str(e),
         )
 
+
 @router.post("/read-all", response_model=List[NotificationResponse])
 def mark_all_notifications_as_read(
     *,
@@ -153,4 +173,4 @@ def mark_all_notifications_as_read(
     """
     Mark all user's notifications as read.
     """
-    return crud_notification.mark_all_as_read(db, user_id=current_user.id) 
+    return crud_notification.mark_all_as_read(db, user_id=current_user.id)

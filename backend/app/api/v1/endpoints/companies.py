@@ -1,14 +1,16 @@
 from typing import Any, List
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_db
 from app.api.deps import get_current_active_user
+from app.core.deps import get_db
 from app.crud import crud_company
 from app.models.user import User
 from app.schemas.company import CompanyCreate, CompanyResponse, CompanyUpdate
 
 router = APIRouter()
+
 
 @router.get("/search", response_model=List[CompanyResponse])
 def search_companies(
@@ -23,13 +25,9 @@ def search_companies(
     Search companies by name, industry, and location.
     """
     return crud_company.search(
-        db,
-        query=query,
-        industry=industry,
-        location=location,
-        skip=skip,
-        limit=limit
+        db, query=query, industry=industry, location=location, skip=skip, limit=limit
     )
+
 
 @router.get("/industry/{industry}", response_model=List[CompanyResponse])
 def get_companies_by_industry(
@@ -43,6 +41,7 @@ def get_companies_by_industry(
     """
     return crud_company.get_by_industry(db, industry=industry, skip=skip, limit=limit)
 
+
 @router.get("/location/{location}", response_model=List[CompanyResponse])
 def get_companies_by_location(
     location: str,
@@ -54,6 +53,7 @@ def get_companies_by_location(
     Get companies by location.
     """
     return crud_company.get_by_location(db, location=location, skip=skip, limit=limit)
+
 
 @router.get("/{company_id}", response_model=CompanyResponse)
 def get_company(
@@ -71,6 +71,7 @@ def get_company(
         )
     return company
 
+
 @router.post("/", response_model=CompanyResponse)
 def create_company(
     *,
@@ -87,6 +88,7 @@ def create_company(
             detail="Not enough permissions",
         )
     return crud_company.create(db, obj_in=company_in, user_id=current_user.id)
+
 
 @router.put("/{company_id}", response_model=CompanyResponse)
 def update_company(
@@ -112,6 +114,7 @@ def update_company(
         )
     return crud_company.update(db, db_obj=company, obj_in=company_in)
 
+
 @router.delete("/{company_id}")
 def delete_company(
     *,
@@ -133,4 +136,4 @@ def delete_company(
             status_code=403,
             detail="Not enough permissions",
         )
-    return crud_company.remove(db, id=company_id) 
+    return crud_company.remove(db, id=company_id)

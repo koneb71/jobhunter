@@ -1,21 +1,29 @@
 from typing import Any
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_db
 from app.schemas.search import (
-    SearchParams, SearchResponse, JobType, ExperienceLevel,
-    SortBy, SortOrder
+    ExperienceLevel,
+    JobType,
+    SearchParams,
+    SearchResponse,
+    SortBy,
+    SortOrder,
 )
 from app.services.search import search_service
 
 router = APIRouter()
 
+
 @router.get("/", response_model=SearchResponse)
 def search(
     query: str = Query(None, description="Search query for jobs and companies"),
     job_type: JobType = Query(None, description="Filter by job type"),
-    experience_level: ExperienceLevel = Query(None, description="Filter by experience level"),
+    experience_level: ExperienceLevel = Query(
+        None, description="Filter by experience level"
+    ),
     location: str = Query(None, description="Filter by location"),
     industry: str = Query(None, description="Filter by industry"),
     salary_min: float = Query(None, description="Minimum salary"),
@@ -46,7 +54,7 @@ def search(
         sort_by=sort_by,
         sort_order=sort_order,
         page=page,
-        page_size=page_size
+        page_size=page_size,
     )
-    
-    return search_service.search(db, search_params) 
+
+    return search_service.search(db, search_params)

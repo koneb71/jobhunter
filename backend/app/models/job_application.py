@@ -1,9 +1,11 @@
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Float, JSON, ForeignKey
+
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import relationship
 
 from app.db.base_class import Base
 from app.schemas.job_application import ApplicationStatus
+
 
 class JobApplication(Base):
     __tablename__ = "job_applications"
@@ -18,7 +20,9 @@ class JobApplication(Base):
     availability_date = Column(DateTime, nullable=True)
     additional_info = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
     # Relationships
     job = relationship("Job", back_populates="applications")
@@ -26,4 +30,4 @@ class JobApplication(Base):
     interviews = relationship("Interview", back_populates="application")
 
     def __repr__(self):
-        return f"<JobApplication {self.id} - {self.status}>" 
+        return f"<JobApplication {self.id} - {self.status}>"

@@ -1,9 +1,10 @@
-from typing import Optional, List
 from datetime import datetime
-from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.base import TimestampSchema
+
 
 class JobBase(BaseModel):
     title: str
@@ -21,11 +22,13 @@ class JobBase(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class JobCreate(JobBase):
     department: Optional[str] = None
     remote_work: bool = False
     visa_sponsorship: bool = False
     relocation_assistance: bool = False
+
 
 class JobUpdate(JobBase):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -36,6 +39,7 @@ class JobUpdate(JobBase):
     remote_work: Optional[bool] = None
     visa_sponsorship: Optional[bool] = None
     relocation_assistance: Optional[bool] = None
+
 
 class Job(JobBase):
     id: str
@@ -53,8 +57,10 @@ class Job(JobBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class JobResponse(Job):
     pass
+
 
 class JobSearchParams(BaseModel):
     query: Optional[str] = None
@@ -67,4 +73,4 @@ class JobSearchParams(BaseModel):
     visa_sponsorship: Optional[bool] = None
     company_id: Optional[str] = None
     skip: int = 0
-    limit: int = 10 
+    limit: int = 10

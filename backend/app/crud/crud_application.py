@@ -1,12 +1,20 @@
-from typing import Any, Dict, List, Optional, Union
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List, Union
+
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
 
 from app.crud.base import CRUDBase
 from app.models.job_application import JobApplication
-from app.schemas.job_application import JobApplicationCreate, JobApplicationUpdate, ApplicationStatus
+from app.schemas.job_application import (
+    ApplicationStatus,
+    JobApplicationCreate,
+    JobApplicationUpdate,
+)
 
-class CRUDJobApplication(CRUDBase[JobApplication, JobApplicationCreate, JobApplicationUpdate]):
+
+class CRUDJobApplication(
+    CRUDBase[JobApplication, JobApplicationCreate, JobApplicationUpdate]
+):
     def get_by_applicant(
         self, db: Session, *, applicant_id: str, skip: int = 0, limit: int = 100
     ) -> List[JobApplication]:
@@ -54,7 +62,7 @@ class CRUDJobApplication(CRUDBase[JobApplication, JobApplicationCreate, JobAppli
             status=ApplicationStatus.PENDING,
             expected_salary=obj_in.expected_salary,
             availability_date=obj_in.availability_date,
-            additional_info=obj_in.additional_info
+            additional_info=obj_in.additional_info,
         )
         db.add(db_obj)
         db.commit()
@@ -70,4 +78,5 @@ class CRUDJobApplication(CRUDBase[JobApplication, JobApplicationCreate, JobAppli
     ) -> JobApplication:
         return super().update(db, db_obj=db_obj, obj_in=obj_in)
 
-crud_job_application = CRUDJobApplication(JobApplication) 
+
+crud_job_application = CRUDJobApplication(JobApplication)

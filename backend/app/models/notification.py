@@ -1,9 +1,14 @@
-from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, Enum as SQLAlchemyEnum
-from sqlalchemy.orm import relationship
-from datetime import datetime
-from app.db.base_class import Base
 import uuid
+from datetime import datetime
 from enum import Enum
+
+from sqlalchemy import Boolean, Column, DateTime
+from sqlalchemy import Enum as SQLAlchemyEnum
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import relationship
+
+from app.db.base_class import Base
+
 
 class NotificationType(str, Enum):
     JOB_APPLICATION = "job_application"
@@ -13,24 +18,31 @@ class NotificationType(str, Enum):
     SYSTEM = "system"
     PAYMENT = "payment"
 
+
 class NotificationStatus(str, Enum):
     UNREAD = "unread"
     READ = "read"
     ARCHIVED = "archived"
+
 
 class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    type = Column(SQLAlchemyEnum(NotificationType, name="notification_type_enum"), nullable=False)
+    type = Column(
+        SQLAlchemyEnum(NotificationType, name="notification_type_enum"), nullable=False
+    )
     title = Column(String, nullable=False)
     message = Column(String, nullable=False)
-    status = Column(SQLAlchemyEnum(NotificationStatus, name="notification_status_enum"), default=NotificationStatus.UNREAD)
+    status = Column(
+        SQLAlchemyEnum(NotificationStatus, name="notification_status_enum"),
+        default=NotificationStatus.UNREAD,
+    )
     created_at = Column(DateTime, default=datetime.utcnow)
     read_at = Column(DateTime, nullable=True)
     notification_data = Column(String, nullable=True)  # JSON string for additional data
     link = Column(String, nullable=True)  # URL to related content
 
     # Relationships
-    user = relationship("User", back_populates="notifications") 
+    user = relationship("User", back_populates="notifications")

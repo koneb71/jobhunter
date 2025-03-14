@@ -1,16 +1,25 @@
-from typing import List, Dict, Any, Optional
-from datetime import datetime
-from app.schemas.profile import (
-    ProfileScore, ProfileStrength, SkillRating,
-    SkillEndorsement, ProfileVerification, ProfileAnalytics
-)
-from app.schemas.user import UserResponse, ProfilePictureMetadata
-from PIL import Image
 import io
 import os
-from fastapi import UploadFile
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import aiofiles
+from fastapi import UploadFile
+from PIL import Image
+
 from app.core.config import settings
+from app.schemas.profile import (
+    ProfileAnalytics,
+    ProfileScore,
+    ProfileStrength,
+    ProfileVerification,
+    ProfileVerificationStatus,
+    SkillEndorsement,
+    SkillLevel,
+    SkillRating,
+)
+from app.schemas.user import ProfilePictureMetadata, UserResponse
+
 
 class ProfileService:
     @staticmethod
@@ -115,11 +124,13 @@ class ProfileService:
             strength=strength,
             missing_fields=missing_fields,
             recommendations=recommendations,
-            last_updated=datetime.utcnow().isoformat()
+            last_updated=datetime.utcnow().isoformat(),
         )
 
     @staticmethod
-    def calculate_skill_rating(skill: str, work_experience: List[Dict[str, Any]]) -> SkillRating:
+    def calculate_skill_rating(
+        skill: str, work_experience: List[Dict[str, Any]]
+    ) -> SkillRating:
         """Calculate skill rating based on work experience."""
         total_years = 0
         last_used = None
@@ -127,7 +138,11 @@ class ProfileService:
         for exp in work_experience:
             if skill in exp.get("skills_used", []):
                 start_date = datetime.fromisoformat(exp["start_date"])
-                end_date = datetime.fromisoformat(exp["end_date"]) if exp.get("end_date") else datetime.utcnow()
+                end_date = (
+                    datetime.fromisoformat(exp["end_date"])
+                    if exp.get("end_date")
+                    else datetime.utcnow()
+                )
                 years = (end_date - start_date).days / 365.25
                 total_years += years
 
@@ -148,15 +163,12 @@ class ProfileService:
             skill=skill,
             level=level,
             years_of_experience=round(total_years, 1),
-            last_used=last_used.isoformat() if last_used else None
+            last_used=last_used.isoformat() if last_used else None,
         )
 
     @staticmethod
     def create_skill_endorsement(
-        skill: str,
-        endorser_id: str,
-        endorser_name: str,
-        comment: Optional[str] = None
+        skill: str, endorser_id: str, endorser_name: str, comment: Optional[str] = None
     ) -> SkillEndorsement:
         """Create a new skill endorsement."""
         return SkillEndorsement(
@@ -164,7 +176,7 @@ class ProfileService:
             endorser_id=endorser_id,
             endorser_name=endorser_name,
             endorsement_date=datetime.utcnow().isoformat(),
-            comment=comment
+            comment=comment,
         )
 
     @staticmethod
@@ -172,7 +184,7 @@ class ProfileService:
         current_verification: Optional[ProfileVerification],
         field: str,
         verified_by: str,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
     ) -> ProfileVerification:
         """Update profile verification status."""
         if not current_verification:
@@ -183,11 +195,15 @@ class ProfileService:
             verified_fields.append(field)
 
         return ProfileVerification(
-            status=ProfileVerificationStatus.VERIFIED if len(verified_fields) > 0 else ProfileVerificationStatus.UNVERIFIED,
+            status=(
+                ProfileVerificationStatus.VERIFIED
+                if len(verified_fields) > 0
+                else ProfileVerificationStatus.UNVERIFIED
+            ),
             verified_fields=verified_fields,
             verification_date=datetime.utcnow().isoformat(),
             verified_by=verified_by,
-            notes=notes
+            notes=notes,
         )
 
     @staticmethod
@@ -195,14 +211,14 @@ class ProfileService:
         current_analytics: Optional[ProfileAnalytics],
         view_type: str = "view",
         skill_trend: Optional[Dict[str, Any]] = None,
-        preference_change: Optional[Dict[str, Any]] = None
+        preference_change: Optional[Dict[str, Any]] = None,
     ) -> ProfileAnalytics:
         """Update profile analytics."""
         if not current_analytics:
             current_analytics = ProfileAnalytics()
 
         analytics = current_analytics.dict()
-        
+
         if view_type == "view":
             analytics["views"] += 1
             analytics["unique_views"] += 1
@@ -211,16 +227,14 @@ class ProfileService:
             analytics["search_appearances"] += 1
 
         if skill_trend:
-            analytics["skill_trends"].append({
-                **skill_trend,
-                "timestamp": datetime.utcnow().isoformat()
-            })
+            analytics["skill_trends"].append(
+                {**skill_trend, "timestamp": datetime.utcnow().isoformat()}
+            )
 
         if preference_change:
-            analytics["preference_changes"].append({
-                **preference_change,
-                "timestamp": datetime.utcnow().isoformat()
-            })
+            analytics["preference_changes"].append(
+                {**preference_change, "timestamp": datetime.utcnow().isoformat()}
+            )
 
         return ProfileAnalytics(**analytics)
 
@@ -229,13 +243,13 @@ class ProfileService:
         """Calculate profile completion percentage and missing fields."""
         required_fields = ["full_name", "email", "phone", "bio", "location"]
         missing_fields = []
-        
+
         # Check basic user fields
         if not user.full_name:
             missing_fields.append("full_name")
         if not user.email:
             missing_fields.append("email")
-        
+
         # Check profile fields
         if user.profile:
             if not user.profile.phone:
@@ -246,16 +260,17 @@ class ProfileService:
                 missing_fields.append("location")
         else:
             missing_fields.extend(["phone", "bio", "location"])
-        
+
         # Calculate completion percentage
         completed_fields = len(required_fields) - len(missing_fields)
         completion_percentage = (completed_fields / len(required_fields)) * 100
-        
+
         return {
             "completion_percentage": completion_percentage,
             "missing_fields": missing_fields,
-            "required_fields": required_fields
+            "required_fields": required_fields,
         }
+
 
 # Profile picture settings
 PROFILE_PICTURE_SETTINGS = {
@@ -264,71 +279,77 @@ PROFILE_PICTURE_SETTINGS = {
     "quality": 85,  # JPEG quality (0-100)
     "allowed_formats": ["image/jpeg", "image/png"],
     "allowed_extensions": [".jpg", ".jpeg", ".png"],
-    "thumbnail_sizes": {
-        "small": (100, 100),
-        "medium": (200, 200),
-        "large": (400, 400)
-    }
+    "thumbnail_sizes": {"small": (100, 100), "medium": (200, 200), "large": (400, 400)},
 }
+
 
 class ProfilePictureCompression:
     @staticmethod
     async def compress_profile_picture(
-        file: UploadFile,
-        user_id: str
+        file: UploadFile, user_id: str
     ) -> Dict[str, Any]:
         """Compress and optimize a profile picture."""
         try:
             # Validate file type
             if file.content_type not in PROFILE_PICTURE_SETTINGS["allowed_formats"]:
-                raise ValueError(f"Unsupported file type. Allowed types: {', '.join(PROFILE_PICTURE_SETTINGS['allowed_formats'])}")
-            
+                raise ValueError(
+                    f"Unsupported file type. Allowed types: {', '.join(PROFILE_PICTURE_SETTINGS['allowed_formats'])}"
+                )
+
             # Read file content
             content = await file.read()
             if len(content) > PROFILE_PICTURE_SETTINGS["max_size"]:
-                raise ValueError(f"File too large. Maximum size: {PROFILE_PICTURE_SETTINGS['max_size']/1024/1024}MB")
-            
+                raise ValueError(
+                    f"File too large. Maximum size: {PROFILE_PICTURE_SETTINGS['max_size']/1024/1024}MB"
+                )
+
             # Open image with PIL
             image = Image.open(io.BytesIO(content))
-            
+
             # Convert to RGB if necessary
-            if image.mode in ('RGBA', 'LA'):
-                background = Image.new('RGB', image.size, (255, 255, 255))
+            if image.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", image.size, (255, 255, 255))
                 background.paste(image, mask=image.split()[-1])
                 image = background
-            
+
             # Resize if needed
-            if image.size[0] > PROFILE_PICTURE_SETTINGS["max_dimensions"][0] or \
-               image.size[1] > PROFILE_PICTURE_SETTINGS["max_dimensions"][1]:
-                image.thumbnail(PROFILE_PICTURE_SETTINGS["max_dimensions"], Image.Resampling.LANCZOS)
-            
+            if (
+                image.size[0] > PROFILE_PICTURE_SETTINGS["max_dimensions"][0]
+                or image.size[1] > PROFILE_PICTURE_SETTINGS["max_dimensions"][1]
+            ):
+                image.thumbnail(
+                    PROFILE_PICTURE_SETTINGS["max_dimensions"], Image.Resampling.LANCZOS
+                )
+
             # Save compressed image
             output = io.BytesIO()
             image.save(
                 output,
-                format='JPEG',
+                format="JPEG",
                 quality=PROFILE_PICTURE_SETTINGS["quality"],
-                optimize=True
+                optimize=True,
             )
             compressed_content = output.getvalue()
-            
+
             # Calculate compression stats
             original_size = len(content)
             compressed_size = len(compressed_content)
             compression_ratio = compressed_size / original_size
-            
+
             # Generate unique filename
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
             file_extension = os.path.splitext(file.filename)[1].lower()
             unique_filename = f"profile_{user_id}_{timestamp}{file_extension}"
-            
+
             # Save to temporary file
-            temp_path = os.path.join(settings.UPLOAD_DIR, settings.TEMP_DIR, unique_filename)
+            temp_path = os.path.join(
+                settings.UPLOAD_DIR, settings.TEMP_DIR, unique_filename
+            )
             os.makedirs(os.path.dirname(temp_path), exist_ok=True)
-            
-            async with aiofiles.open(temp_path, 'wb') as out_file:
+
+            async with aiofiles.open(temp_path, "wb") as out_file:
                 await out_file.write(compressed_content)
-            
+
             return {
                 "success": True,
                 "filename": unique_filename,
@@ -341,68 +362,62 @@ class ProfilePictureCompression:
                     format=image.format,
                     thumbnail_dimensions={},  # Will be populated by generate_thumbnails
                     local_path=temp_path,
-                    created_at=datetime.utcnow().isoformat()
-                )
-            }
-            
-        except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
+                    created_at=datetime.utcnow().isoformat(),
+                ),
             }
 
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     @staticmethod
-    async def generate_thumbnails(
-        image_path: str,
-        user_id: str
-    ) -> Dict[str, Any]:
+    async def generate_thumbnails(image_path: str, user_id: str) -> Dict[str, Any]:
         """Generate multiple thumbnail versions of the profile picture."""
         try:
             thumbnails = {}
             # Open the original image
             with Image.open(image_path) as image:
                 # Convert to RGB if necessary
-                if image.mode in ('RGBA', 'LA'):
-                    background = Image.new('RGB', image.size, (255, 255, 255))
+                if image.mode in ("RGBA", "LA"):
+                    background = Image.new("RGB", image.size, (255, 255, 255))
                     background.paste(image, mask=image.split()[-1])
                     image = background
-                
+
                 # Generate thumbnails for each size
-                for size_name, size in PROFILE_PICTURE_SETTINGS["thumbnail_sizes"].items():
+                for size_name, size in PROFILE_PICTURE_SETTINGS[
+                    "thumbnail_sizes"
+                ].items():
                     # Create a copy of the image for this thumbnail
                     thumb = image.copy()
                     # Create thumbnail
                     thumb.thumbnail(size, Image.Resampling.LANCZOS)
-                    
+
                     # Generate thumbnail filename
                     base_name, ext = os.path.splitext(image_path)
-                    thumb_filename = f"thumb_{size_name}_{os.path.basename(base_name)}{ext}"
-                    thumb_path = os.path.join(settings.UPLOAD_DIR, settings.TEMP_DIR, thumb_filename)
-                    
+                    thumb_filename = (
+                        f"thumb_{size_name}_{os.path.basename(base_name)}{ext}"
+                    )
+                    thumb_path = os.path.join(
+                        settings.UPLOAD_DIR, settings.TEMP_DIR, thumb_filename
+                    )
+
                     # Save thumbnail
                     thumb.save(
                         thumb_path,
-                        format='JPEG',
+                        format="JPEG",
                         quality=PROFILE_PICTURE_SETTINGS["quality"],
-                        optimize=True
+                        optimize=True,
                     )
-                    
+
                     thumbnails[size_name] = {
                         "path": thumb_path,
                         "filename": thumb_filename,
-                        "dimensions": thumb.size
+                        "dimensions": thumb.size,
                     }
-                
-                return {
-                    "success": True,
-                    "thumbnails": thumbnails
-                }
-                
+
+                return {"success": True, "thumbnails": thumbnails}
+
         except Exception as e:
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return {"success": False, "error": str(e)}
 
     @staticmethod
     async def cleanup_temp_files(file_paths: List[str]) -> None:
@@ -412,4 +427,4 @@ class ProfilePictureCompression:
                 if os.path.exists(path):
                     os.remove(path)
             except Exception as e:
-                print(f"Error removing temporary file {path}: {str(e)}") 
+                print(f"Error removing temporary file {path}: {str(e)}")

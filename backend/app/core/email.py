@@ -1,6 +1,8 @@
 from typing import List, Optional
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+
+from fastapi_mail import ConnectionConfig, FastMail, MessageSchema
 from pydantic import EmailStr
+
 from app.core.config import settings
 
 conf = ConnectionConfig(
@@ -16,7 +18,10 @@ conf = ConnectionConfig(
     VALIDATE_CERTS=True,
 )
 
-def get_email_template(title: str, content: str, button_text: str = None, button_url: str = None) -> str:
+
+def get_email_template(
+    title: str, content: str, button_text: str = None, button_url: str = None
+) -> str:
     """
     Generate a professional email template with consistent styling.
     """
@@ -118,6 +123,7 @@ def get_email_template(title: str, content: str, button_text: str = None, button
     </html>
     """
 
+
 async def send_email(
     email_to: EmailStr,
     subject: str,
@@ -134,7 +140,7 @@ async def send_email(
         subtype="html",
         sender=email_from or settings.MAIL_FROM,
     )
-    
+
     fm = FastMail(conf)
     try:
         await fm.send_message(message)
@@ -142,6 +148,7 @@ async def send_email(
     except Exception as e:
         print(f"Error sending email: {e}")
         return False
+
 
 async def send_emails(
     emails_to: List[EmailStr],
@@ -159,7 +166,7 @@ async def send_emails(
         subtype="html",
         sender=email_from or settings.MAIL_FROM,
     )
-    
+
     fm = FastMail(conf)
     try:
         await fm.send_message(message)
@@ -168,27 +175,29 @@ async def send_emails(
         print(f"Error sending emails: {e}")
         return False
 
+
 async def send_verification_email(email_to: EmailStr, token: str) -> bool:
     """
     Send a verification email to a user.
     """
     subject = "Verify your email address"
-    verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
-    
-    content = f"""
+    verification_url = "{settings.FRONTEND_URL}/verify-email?token={token}"
+
+    content = """
     <p>Welcome to JobHunter! We're excited to have you join our community of professionals.</p>
     <p>To get started, please verify your email address by clicking the button below:</p>
     <p>If you didn't create an account, you can safely ignore this email.</p>
     """
-    
+
     body = get_email_template(
         title="Welcome to JobHunter!",
         content=content,
         button_text="Verify Email Address",
-        button_url=verification_url
+        button_url=verification_url,
     )
-    
+
     return await send_email(email_to, subject, body)
+
 
 async def send_password_reset_email(email_to: EmailStr, token: str) -> bool:
     """
@@ -196,19 +205,19 @@ async def send_password_reset_email(email_to: EmailStr, token: str) -> bool:
     """
     subject = "Reset your password"
     reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
-    
-    content = f"""
+
+    content = """
     <p>We received a request to reset your password for your JobHunter account.</p>
     <p>Click the button below to create a new password:</p>
     <p>This link will expire in 30 minutes for security reasons.</p>
     <p>If you didn't request this password reset, you can safely ignore this email.</p>
     """
-    
+
     body = get_email_template(
         title="Password Reset Request",
         content=content,
         button_text="Reset Password",
-        button_url=reset_url
+        button_url=reset_url,
     )
-    
-    return await send_email(email_to, subject, body) 
+
+    return await send_email(email_to, subject, body)

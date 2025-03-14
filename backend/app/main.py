@@ -1,12 +1,14 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 
-from app.core.config import settings
+from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
 from app.api.v1.api import api_router
+from app.core.config import settings
 from app.core.middleware import RequestLoggingMiddleware
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,11 +18,12 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("Shutting down...")
 
+
 app = FastAPI(
     title="JobHunter API",
     description="A comprehensive job search platform API",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Configure CORS
@@ -38,6 +41,7 @@ app.add_middleware(RequestLoggingMiddleware)
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
 
+
 # Error handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
@@ -46,6 +50,7 @@ async def validation_exception_handler(request, exc):
         content={"detail": exc.errors()},
     )
 
+
 @app.get("/")
 async def root():
     return {
@@ -53,4 +58,4 @@ async def root():
         "version": "1.0.0",
         "docs_url": "/docs",
         "redoc_url": "/redoc",
-    } 
+    }

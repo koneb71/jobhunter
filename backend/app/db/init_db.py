@@ -1,12 +1,15 @@
 import logging
+
 from sqlalchemy.orm import Session
+
+from app.core.password import get_password_hash
 from app.db.base_class import Base
 from app.db.session import engine
-from app.models import User, UserType, Profile, Job, JobApplication
-from app.core.password import get_password_hash
+from app.models import Job, JobApplication, Profile, User, UserType
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def init_db(db: Session) -> None:
     # Create tables
@@ -48,7 +51,9 @@ def init_db(db: Session) -> None:
     db.commit()
     logger.info("Database initialized")
 
+
 if __name__ == "__main__":
     from app.db.session import SessionLocal
+
     db = SessionLocal()
-    init_db(db) 
+    init_db(db)

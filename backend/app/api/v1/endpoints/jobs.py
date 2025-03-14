@@ -1,24 +1,27 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.crud.crud_job import crud_job
-from app.models.job import Job, JobType, ExperienceLevel
-from app.schemas.job import JobCreate, JobUpdate, JobResponse
 from app.api import deps
+from app.crud.crud_job import crud_job
+from app.models.job import ExperienceLevel, Job, JobType
+from app.schemas.job import JobCreate, JobResponse, JobUpdate
 
 router = APIRouter()
+
 
 @router.get("/featured", response_model=List[JobResponse])
 def get_featured_jobs(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
 ) -> List[Job]:
     """
     Get featured jobs.
     """
     return crud_job.get_featured(db, skip=skip, limit=limit)
+
 
 @router.get("/search", response_model=List[JobResponse])
 def search_jobs(
@@ -32,7 +35,7 @@ def search_jobs(
     visa_sponsorship: Optional[bool] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
 ) -> List[Job]:
     """
     Search jobs with multiple filters.
@@ -48,42 +51,41 @@ def search_jobs(
         remote_work=remote_work,
         visa_sponsorship=visa_sponsorship,
         skip=skip,
-        limit=limit
+        limit=limit,
     )
 
+
 @router.get("/{job_id}", response_model=JobResponse)
-def get_job(
-    job_id: int,
-    db: Session = Depends(deps.get_db)
-) -> Job:
+def get_job(job_id: int, db: Session = Depends(deps.get_db)) -> Job:
     """
     Get a job by ID.
     """
     job = crud_job.get(db, id=job_id)
     if not job:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
     return job
+
 
 @router.post("/", response_model=JobResponse)
 def create_job(
     job_in: JobCreate,
     db: Session = Depends(deps.get_db),
-    current_user = Depends(deps.get_current_user)
+    current_user=Depends(deps.get_current_user),
 ) -> Job:
     """
     Create a new job.
     """
     return crud_job.create(db, obj_in=job_in, employer_id=current_user.id)
 
+
 @router.put("/{job_id}", response_model=JobResponse)
 def update_job(
     job_id: int,
     job_in: JobUpdate,
     db: Session = Depends(deps.get_db),
-    current_user = Depends(deps.get_current_user)
+    current_user=Depends(deps.get_current_user),
 ) -> Job:
     """
     Update a job.
@@ -91,21 +93,20 @@ def update_job(
     job = crud_job.get(db, id=job_id)
     if not job:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
     if job.employer_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
         )
     return crud_job.update(db, db_obj=job, obj_in=job_in)
+
 
 @router.delete("/{job_id}")
 def delete_job(
     job_id: int,
     db: Session = Depends(deps.get_db),
-    current_user = Depends(deps.get_current_user)
+    current_user=Depends(deps.get_current_user),
 ) -> dict:
     """
     Delete a job.
@@ -113,13 +114,11 @@ def delete_job(
     job = crud_job.get(db, id=job_id)
     if not job:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Job not found"
         )
     if job.employer_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
         )
     crud_job.remove(db, id=job_id)
-    return {"message": "Job deleted successfully"} 
+    return {"message": "Job deleted successfully"}

@@ -1,9 +1,14 @@
-from datetime import datetime
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum as SQLAlchemyEnum, JSON
-from sqlalchemy.orm import relationship
-from app.db.base_class import Base
 import uuid
+from datetime import datetime
 from enum import Enum
+
+from sqlalchemy import JSON, Column, DateTime
+from sqlalchemy import Enum as SQLAlchemyEnum
+from sqlalchemy import Float, ForeignKey, String
+from sqlalchemy.orm import relationship
+
+from app.db.base_class import Base
+
 
 class PaymentStatus(str, Enum):
     PENDING = "pending"
@@ -12,11 +17,13 @@ class PaymentStatus(str, Enum):
     REFUNDED = "refunded"
     CANCELLED = "cancelled"
 
+
 class PaymentType(str, Enum):
     JOB_POSTING = "job_posting"
     FEATURED_JOB = "featured_job"
     SUBSCRIPTION = "subscription"
     OTHER = "other"
+
 
 class PaymentMethod(str, Enum):
     CREDIT_CARD = "credit_card"
@@ -25,15 +32,23 @@ class PaymentMethod(str, Enum):
     PAYPAL = "paypal"
     OTHER = "other"
 
+
 class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     amount = Column(Float, nullable=False)
-    payment_type = Column(SQLAlchemyEnum(PaymentType, name="payment_type_enum"), nullable=False)
-    payment_method = Column(SQLAlchemyEnum(PaymentMethod, name="payment_method_enum"), nullable=False)
-    status = Column(SQLAlchemyEnum(PaymentStatus, name="payment_status_enum"), default=PaymentStatus.PENDING)
+    payment_type = Column(
+        SQLAlchemyEnum(PaymentType, name="payment_type_enum"), nullable=False
+    )
+    payment_method = Column(
+        SQLAlchemyEnum(PaymentMethod, name="payment_method_enum"), nullable=False
+    )
+    status = Column(
+        SQLAlchemyEnum(PaymentStatus, name="payment_status_enum"),
+        default=PaymentStatus.PENDING,
+    )
     description = Column(String, nullable=True)
     payment_metadata = Column(JSON, default=dict)
     job_id = Column(String, ForeignKey("jobs.id"), nullable=True)
@@ -48,4 +63,4 @@ class Payment(Base):
     job = relationship("Job", back_populates="payments")
 
     def __repr__(self):
-        return f"<Payment {self.id} - {self.status}>" 
+        return f"<Payment {self.id} - {self.status}>"

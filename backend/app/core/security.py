@@ -1,8 +1,11 @@
 from datetime import datetime, timedelta
 from typing import Any, Union
+
 from jose import jwt
-from app.core.config import settings
+
 from app.core.auth import ALGORITHM
+from app.core.config import settings
+
 
 def create_access_token(
     subject: Union[str, Any], expires_delta: timedelta = None
@@ -18,4 +21,4 @@ def create_access_token(
         )
     to_encode = {"exp": expire, "sub": str(subject)}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt 
+    return encoded_jwt

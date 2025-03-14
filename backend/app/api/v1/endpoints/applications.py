@@ -1,13 +1,19 @@
 from typing import Any, List
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.crud import crud_job_application, crud_job
+from app.crud import crud_job, crud_job_application
 from app.models.user import User
-from app.schemas.job_application import JobApplicationCreate, JobApplicationResponse, JobApplicationUpdate
+from app.schemas.job_application import (
+    JobApplicationCreate,
+    JobApplicationResponse,
+    JobApplicationUpdate,
+)
 
 router = APIRouter()
+
 
 @router.get("/my-applications", response_model=List[JobApplicationResponse])
 def get_my_applications(
@@ -19,7 +25,10 @@ def get_my_applications(
     """
     Get current user's applications.
     """
-    return crud_job_application.get_by_applicant(db, applicant_id=current_user.id, skip=skip, limit=limit)
+    return crud_job_application.get_by_applicant(
+        db, applicant_id=current_user.id, skip=skip, limit=limit
+    )
+
 
 @router.get("/job/{job_id}", response_model=List[JobApplicationResponse])
 def get_job_applications(
@@ -39,6 +48,7 @@ def get_job_applications(
         )
     return crud_job_application.get_by_job(db, job_id=job_id, skip=skip, limit=limit)
 
+
 @router.get("/status/{status}", response_model=List[JobApplicationResponse])
 def get_applications_by_status(
     status: str,
@@ -56,6 +66,7 @@ def get_applications_by_status(
             detail="Not enough permissions",
         )
     return crud_job_application.get_by_status(db, status=status, skip=skip, limit=limit)
+
 
 @router.get("/{application_id}", response_model=JobApplicationResponse)
 def get_application(
@@ -79,6 +90,7 @@ def get_application(
         )
     return application
 
+
 @router.post("/", response_model=JobApplicationResponse)
 def create_application(
     *,
@@ -96,17 +108,22 @@ def create_application(
             status_code=404,
             detail="Job not found or not active",
         )
-    
+
     # Check if user has already applied
-    existing_applications = crud_job_application.get_by_applicant(db, applicant_id=current_user.id)
+    existing_applications = crud_job_application.get_by_applicant(
+        db, applicant_id=current_user.id
+    )
     for app in existing_applications:
         if app.job_id == application_in.job_id:
             raise HTTPException(
                 status_code=400,
                 detail="You have already applied for this job",
             )
-    
-    return crud_job_application.create(db, obj_in=application_in, applicant_id=current_user.id)
+
+    return crud_job_application.create(
+        db, obj_in=application_in, applicant_id=current_user.id
+    )
+
 
 @router.put("/{application_id}", response_model=JobApplicationResponse)
 def update_application(
@@ -132,6 +149,7 @@ def update_application(
         )
     return crud_job_application.update(db, db_obj=application, obj_in=application_in)
 
+
 @router.delete("/{application_id}")
 def delete_application(
     *,
@@ -153,4 +171,4 @@ def delete_application(
             status_code=403,
             detail="Not enough permissions",
         )
-    return crud_job_application.remove(db, id=application_id) 
+    return crud_job_application.remove(db, id=application_id)

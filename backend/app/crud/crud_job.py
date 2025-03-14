@@ -1,12 +1,14 @@
-from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_, and_
-from app.core.logger import logger
+from typing import Any, Dict, List, Optional, Union
 
+from sqlalchemy import and_, desc, or_
+from sqlalchemy.orm import Session
+
+from app.core.logger import logger
 from app.crud.base import CRUDBase
-from app.models.job import Job, JobType, ExperienceLevel
+from app.models.job import ExperienceLevel, Job, JobType
 from app.schemas.job import JobCreate, JobUpdate
+
 
 class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
     def get_by_employer(
@@ -21,9 +23,7 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
             .all()
         )
 
-    def get_featured(
-        self, db: Session, *, skip: int = 0, limit: int = 10
-    ) -> List[Job]:
+    def get_featured(self, db: Session, *, skip: int = 0, limit: int = 10) -> List[Job]:
         """
         Get featured jobs that are active and not expired.
         """
@@ -33,7 +33,7 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
             .filter(
                 Job.is_featured == True,
                 Job.is_active == True,
-                or_(Job.expires_at.is_(None), Job.expires_at > now)
+                or_(Job.expires_at.is_(None), Job.expires_at > now),
             )
             .order_by(desc(Job.created_at))
             .offset(skip)
@@ -55,7 +55,7 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         visa_sponsorship: Optional[bool] = None,
         employer_id: Optional[int] = None,
         skip: int = 0,
-        limit: int = 10
+        limit: int = 10,
     ) -> List[Job]:
         """
         Search jobs with multiple filters.
@@ -63,14 +63,13 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         now = datetime.utcnow()
         filters = [
             Job.is_active == True,
-            or_(Job.expires_at.is_(None), Job.expires_at > now)
+            or_(Job.expires_at.is_(None), Job.expires_at > now),
         ]
 
         if query:
-            filters.append(or_(
-                Job.title.ilike(f"%{query}%"),
-                Job.description.ilike(f"%{query}%")
-            ))
+            filters.append(
+                or_(Job.title.ilike(f"%{query}%"), Job.description.ilike(f"%{query}%"))
+            )
         if location:
             filters.append(Job.location.ilike(f"%{location}%"))
         if job_type:
@@ -97,13 +96,7 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
             .all()
         )
 
-    def create(
-        self,
-        db: Session,
-        *,
-        obj_in: JobCreate,
-        employer_id: int
-    ) -> Job:
+    def create(self, db: Session, *, obj_in: JobCreate, employer_id: int) -> Job:
         """Create a new job."""
         db_obj = Job(
             title=obj_in.title,
@@ -131,21 +124,12 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
         return db_obj
 
     def update(
-        self,
-        db: Session,
-        *,
-        db_obj: Job,
-        obj_in: Union[JobUpdate, Dict[str, Any]]
+        self, db: Session, *, db_obj: Job, obj_in: Union[JobUpdate, Dict[str, Any]]
     ) -> Job:
         """Update a job."""
         return super().update(db, db_obj=db_obj, obj_in=obj_in)
 
-    def delete(
-        self,
-        db: Session,
-        *,
-        id: int
-    ) -> Optional[Job]:
+    def delete(self, db: Session, *, id: int) -> Optional[Job]:
         """Delete a job."""
         obj = db.query(Job).get(id)
         if obj:
@@ -153,4 +137,5 @@ class CRUDJob(CRUDBase[Job, JobCreate, JobUpdate]):
             db.commit()
         return obj
 
-crud_job = CRUDJob(Job) 
+
+crud_job = CRUDJob(Job)

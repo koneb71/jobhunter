@@ -2,4 +2,4 @@
 Core module for the application.
 """
 
-# Core package initialization 
+# Core package initialization
